@@ -134,7 +134,7 @@ Field requirements:
 * `files` (integer, optional): Number of files in the skill bundle.
 * `digest` (string, **required**): SHA-256 hash of the exported tar stream, prefixed with `sha256:`. MUST be present for integrity verification.
 
-Omitted fields and `null` are equivalent and indicate the field is not provided. Empty string (`""`) is invalid for `version` and `digest`.
+Optional fields MUST be omitted if not provided. Producers MUST NOT emit `null` values. Empty string (`""`) is invalid for `version` and `digest`.
 
 ## 7. Viewing: `--skill <id>` (optional)
 
@@ -214,10 +214,7 @@ Rationale: IDs appear in shell scripts and filesystem paths.
 
 ## 11. Metadata (optional, minimal)
 
-Skillflag does not require a manifest file, but implementations **MAY** include metadata in one of these ways:
-
-* YAML frontmatter at the top of `SKILL.md` (common in markdown-based systems)
-* a sidecar file such as `SKILL.json` or `skill.toml`
+Skillflag does not require a manifest file, but implementations **MAY** include metadata as YAML frontmatter at the top of `SKILL.md`.
 
 If metadata exists, it **SHOULD** be treated as advisory by installers.
 
