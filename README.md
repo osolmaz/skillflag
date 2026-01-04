@@ -13,7 +13,7 @@ Status: Informational + Normative (uses **MUST / SHOULD / MAY**)
 Skillflag defines two primary operations:
 
 * **Discovery**: `--skills`
-* **Export**: `--skill <id> --export` (exports the full skill directory as a tar stream on stdout)
+* **Export**: `--export-skill <id>` (exports the full skill directory as a tar stream on stdout)
 
 ## 2. Motivation
 
@@ -64,14 +64,14 @@ Skillflag is designed around these constraints:
 A Skillflag-compliant producer CLI **MUST** implement:
 
 1. `--skills`
-2. `--skill <id> --export`
+2. `--export-skill <id>`
 
 A producer CLI **MAY** additionally implement:
 
 * `--skills --json`
-* `--skill <id>` (without `--export`) as a “view” mode
+* `--skill <id>` as a "view" mode (print skill documentation)
 
-Skillflag does **not** require any particular command substructure (`tool skills ...`) because the goal is a “`--help`-class” universal convention based on flags.
+Skillflag does **not** require any particular command substructure (`tool skills ...`) because the goal is a "`--help`-class" universal convention based on flags.
 
 ## 6. Discovery: `--skills`
 
@@ -109,7 +109,7 @@ If `tool --skills --json` is provided:
 * It **MUST** print a single JSON object to stdout.
 * It **MUST NOT** print additional text to stdout.
 
-Minimal recommended schema:
+Schema:
 
 ```json
 {
@@ -118,30 +118,38 @@ Minimal recommended schema:
     {
       "id": "tmux",
       "summary": "Drive an interactive tmux session",
-      "version": "optional string",
-      "files": "optional: list or count",
-      "digest": "optional: sha256 of exported tar stream"
+      "version": "1.0.0",
+      "files": 3,
+      "digest": "sha256:a1b2c3..."
     }
   ]
 }
 ```
 
-(Fields beyond `id` are optional; keeping JSON minimal is consistent with the “lindy” goal.)
+Field requirements:
+
+* `id` (string, **required**): Skill identifier. MUST NOT be empty.
+* `summary` (string, optional): If omitted, treat as empty string. If present, MUST be a string (not null).
+* `version` (string, optional): Semver-style version. If omitted, assume unversioned. If present, MUST be a non-empty string.
+* `files` (integer, optional): Number of files in the skill bundle.
+* `digest` (string, **required**): SHA-256 hash of the exported tar stream, prefixed with `sha256:`. MUST be present for integrity verification.
+
+Omitted fields and `null` are equivalent and indicate the field is not provided. Empty string (`""`) is invalid for `version` and `digest`.
 
 ## 7. Viewing: `--skill <id>` (optional)
 
-Because `--skill <id> --export` is the normative export mechanism, `--skill <id>` without `--export` is optional. If implemented:
+If implemented:
 
 * `tool --skill <id>` **SHOULD** print a human-oriented representation of the skill to stdout.
 * Recommended: print `<id>/SKILL.md` content only (no extra banners).
 
 This provides a “manpage-like” experience without OS-specific manpage infrastructure.
 
-## 8. Export: `--skill <id> --export`
+## 8. Export: `--export-skill <id>`
 
 ### 8.1 Behavior
 
-* `tool --skill <id> --export` **MUST** write the skill bundle to **stdout** as a tar stream.
+* `tool --export-skill <id>` **MUST** write the skill bundle to **stdout** as a tar stream.
 * The tar stream **MUST** contain exactly one top-level directory named `<id>/`.
 * The directory **MUST** include `<id>/SKILL.md`.
 * No additional output is permitted on stdout.
@@ -162,28 +170,23 @@ Exporters **MUST** ensure:
 * No `..` path traversal segments.
 * All entries are relative under `<id>/`.
 
-### 8.3 Determinism (recommended)
+### 8.3 Determinism
 
 For reproducible installs and caching:
 
-* Exporters **SHOULD** emit entries in stable order.
-* Exporters **MAY** normalize metadata (mtime/uid/gid/uname/gname) to stable values.
+* Exporters **MUST** emit entries in stable, deterministic order (lexicographic by path recommended).
+* Exporters **MUST** normalize metadata to fixed values:
+  * `mtime`: `0` (Unix epoch) or a fixed timestamp
+  * `uid/gid`: `0`
+  * `uname/gname`: empty string or `root`
 
-Determinism is recommended but not required for conformance.
+This ensures identical skill content produces identical tar output and matching digests.
 
 ### 8.4 Error handling and exit codes
 
-A compliant implementation **MUST** return non-zero exit status on failure and **MUST** write error details to stderr.
-
-Recommended exit code conventions:
-
-* `0`: success
-* `2`: usage error / invalid flags
-* `3`: skill not found (`--skill <id>` unknown)
-* `4`: I/O error producing output (broken pipe, permission, etc.)
-* `5`: internal error
-
-(Exact codes may vary, but “not found” vs “usage error” separation is strongly recommended for scripting.)
+* Exit `0` on success.
+* Exit `1` on any error.
+* Write error details to **stderr**.
 
 ## 9. Skill directory layout (bundling convention)
 
@@ -195,7 +198,7 @@ Inside the producer CLI’s distribution artifact, skills **SHOULD** be stored u
 The producer CLI **MUST** map these bundled resources to the Skillflag interface:
 
 * `--skills` enumerates available `<id>` directories.
-* `--skill <id> --export` exports the directory as `<id>/...` in tar form.
+* `--export-skill <id>` exports the directory as `<id>/...` in tar form.
 
 This deliberately avoids any assumption about package managers or OS-level install roots.
 
@@ -243,7 +246,7 @@ Skillflag is designed to compose cleanly with a dedicated installer/adaptor CLI 
 Expected pipeline shape:
 
 ```bash
-tool --skill <id> --export | skill-install --agent <agent> --scope <scope>
+tool --export-skill <id> | skill-install --agent <agent> --scope <scope>
 ```
 
 The installer is responsible for:
@@ -272,20 +275,20 @@ tool --skill tmux
 ### 14.3 Export and inspect without installing
 
 ```bash
-tool --skill tmux --export | tar -tf -
+tool --export-skill tmux | tar -tf -
 ```
 
 ### 14.4 Export and install via an adaptor
 
 ```bash
-tool --skill tmux --export | skill-install --agent codex --scope user
+tool --export-skill tmux | skill-install --agent codex --scope user
 ```
 
 ### 14.5 Export and manually place somewhere (no adaptor needed)
 
 ```bash
 mkdir -p .agents/skills/tmux
-tool --skill tmux --export | tar -x -C .agents/skills
+tool --export-skill tmux | tar -x -C .agents/skills
 ```
 
 (That last example assumes the installer semantics are simply “untar into a skills root”.)
@@ -295,11 +298,13 @@ tool --skill tmux --export | tar -x -C .agents/skills
 A producer CLI is **Skillflag-compliant** if:
 
 - [ ] `--skills` lists Skill IDs on stdout with no extra stdout noise.
-- [ ] `--skill <id> --export` emits a tar stream on stdout.
+- [ ] `--skills --json` includes `digest` for each skill.
+- [ ] `--export-skill <id>` emits a tar stream on stdout.
 - [ ] The tar stream contains exactly one top-level directory `<id>/`.
 - [ ] `<id>/SKILL.md` exists in the exported stream.
+- [ ] Tar entries are deterministic (stable order, normalized metadata).
 - [ ] No absolute paths or path traversal segments appear in the tar entries.
-- [ ] Failures produce non-zero exit code and write errors to stderr.
+- [ ] Failures exit `1` and write errors to stderr.
 
 ---
 
@@ -310,7 +315,7 @@ Scope: installs **one** skill bundle into **one** target agent/tool + scope.
 ### Motivation
 
 * **Skills are directories**, not just `SKILL.md`: they can include scripts, templates, references, assets, etc. (multiple tools describe skills this way). ([OpenAI Developers][1])
-* **Producer CLIs should not encode per-agent install logic.** The producer just exposes skill bundles (via Skillflag: `--skills`, `--skill <id> --export`). The installer maps to agent-specific locations.
+* **Producer CLIs should not encode per-agent install logic.** The producer just exposes skill bundles (via Skillflag: `--skills`, `--export-skill <id>`). The installer maps to agent-specific locations.
 * **Users must opt in**: installing a CLI must not automatically install all of its skills into every local agent. So `skill-install` targets exactly one agent and one scope at a time.
 * **Cross-agent portability exists but paths differ**: several tools already read “portable” directories (notably `.agents/skills` and `~/.config/agents/skills`), while others have native roots like `.claude/skills`, `.codex/skills`, `.github/skills`, etc. ([Block][2])
 
@@ -339,10 +344,10 @@ Install from a tar stream (e.g., produced by a Skillflag producer’s export):
 Example:
 
 ```bash
-producer --skill tmux --export | skill-install --agent claude --scope user
+producer --export-skill tmux | skill-install --agent claude --scope user
 ```
 
-(Producer-side export format is defined by Skillflag: `--skill <id> --export` emits a tar bundle on stdout.)
+(Producer-side export format is defined by Skillflag: `--export-skill <id>` emits a tar bundle on stdout.)
 
 
 ## 2) CLI surface (minimal, stable)
@@ -436,8 +441,11 @@ When reading a tar stream, `skill-install` **must**:
 * Reject `..` traversal.
 * Reject special files (device nodes/FIFOs).
 * Treat symlinks/hardlinks as unsafe by default:
-
   * recommended: reject them outright, or ensure they stay within the extracted skill root.
+
+### 6.1 Integrity verification
+
+If the producer provides a digest (via `--skills --json`), installers **should** verify the tar stream matches the expected `sha256` before extracting. This prevents tampered or corrupted bundles from being installed.
 
 
 ## 7) Destination mapping (what `--agent` + `--scope` means)
@@ -545,13 +553,13 @@ If you want to avoid this uncertainty, use `--agent vscode` (for Copilot) or `--
 ### Install a bundled skill from a producer CLI into one agent (repo scope)
 
 ```bash
-producer --skill tmux --export | skill-install --agent claude --scope repo
+producer --export-skill tmux | skill-install --agent claude --scope repo
 ```
 
-### Install into “portable” so multiple agents can read it
+### Install into "portable" so multiple agents can read it
 
 ```bash
-producer --skill api-setup --export | skill-install --agent portable --scope repo
+producer --export-skill api-setup | skill-install --agent portable --scope repo
 ```
 
 ### Install from a local directory into Codex user scope
