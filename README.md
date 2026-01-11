@@ -10,6 +10,14 @@ Think of Skillflag as “`--help` for skills”: a stable flag-based interface t
 
 AgentSkills ([agentskills.io](https://agentskills.io)) frames the underlying concept well: “Agent Skills are folders of instructions, scripts, and resources that agents can discover and use to do things more accurately and efficiently.”
 
+## Install (optional)
+
+```bash
+npm install -g skillflag
+```
+
+You can also run it without installing by using `npx` (see below).
+
 ## Quick start
 
 List bundled skills:
