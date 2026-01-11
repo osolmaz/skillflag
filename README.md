@@ -1,6 +1,6 @@
 # skillflag
 
-skillflag is a minimal CLI convention for listing and exporting agent skill bundles, plus a reference implementation in Node/TypeScript.
+skillflag is a minimal CLI convention for listing and exporting agent skill bundles.
 
 Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
 
@@ -19,6 +19,8 @@ npm install -g skillflag
 ```
 
 You can also run it without installing by using `npx` (see below).
+
+skillflag is currently implemented in Node/TypeScript. Reach out if you'd like to see it implemented in other languages.
 
 ## Quick start
 
