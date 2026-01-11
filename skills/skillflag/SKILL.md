@@ -51,4 +51,43 @@ skillflag --skill export skillflag | skill-install --agent codex --scope repo
 
 - `skillflag` is the producer interface; it never installs.
 - `skill-install` validates `SKILL.md` frontmatter and installs by copy.
-- See the repository README for the full specification.
+- The full specification lives at `docs/SKILLFLAG_SPEC.md`.
+
+## Spec essentials (producer)
+
+- Producer CLIs MUST implement:
+  - `--skill list`
+  - `--skill export <id>`
+- `--skill list` writes only skill IDs to stdout (no banners).
+- `--skill export <id>` streams a tar with a single top‑level `<id>/` and `<id>/SKILL.md`.
+- Export output MUST be deterministic: sorted entries, fixed `mtime = 0`, `uid/gid = 0`.
+
+## Adding Skillflag to a Node CLI (library integration)
+
+Early‑intercept in your CLI entrypoint so stdout stays clean:
+
+```ts
+// src/bin/cli.ts
+import process from "node:process";
+import { handleSkillflag } from "@osolmaz/skillflag";
+
+const args = process.argv;
+if (args.includes("--skill")) {
+  const exitCode = await handleSkillflag(args, {
+    skillsRoot: new URL("../skills/", import.meta.url),
+  });
+  process.exitCode = exitCode;
+  return;
+}
+
+// ... normal CLI startup here
+```
+
+Repository layout (bundled skills):
+
+```
+skills/
+  my-skill/
+    SKILL.md
+    templates/...
+```
