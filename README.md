@@ -12,6 +12,33 @@ Think of skillflag as "`--help` or `manpage` for skills": a stable flag-based in
 
 With skillflag, CLI tools can bundle and list these skills without having to upload it to a skill registry. With `--skill list|show|export`, any agent can discover and install instructions that are required to use the tool.
 
+## Example
+
+Suppose that you have installed a CLI tool to control Philips Hue lights at home, `hue-cli`.
+
+To list the skills that the tool can export, you can run:
+
+```
+$ hue-cli --skill list
+philips-hue    Control Philips Hue lights in the terminal
+```
+
+You can then install it to your preferred coding agent, such as Claude Code:
+
+```
+$ hue-cli --skill export philips-hue | npx skillflag install --agent claude
+Installed skill philips-hue to .claude/skills/philips-hue
+```
+
+You can optionally install the skill to ~/.claude:
+
+```
+$ hue-cli --skill export philips-hue | npx skillflag install --agent claude --scope user
+Installed skill philips-hue to ~/.claude/skills/philips-hue
+```
+
+Even better, once this convention becomes commonplace, agents will by default do all these before you even run the tool, so when you ask it to "install hue-cli", it will know to run `--skill list` the same way a human would run `--help` after downloading a program.
+
 ## Install (optional)
 
 ```bash
