@@ -51,9 +51,7 @@ function parseSkillArgs(args: string[]): SkillAction {
   if (action === "export" || action === "show") {
     const id = args[idx + 2];
     if (!id || id.startsWith("-")) {
-      throw new SkillflagError(
-        `Missing skill id.\n${usageLines.join("\n")}`,
-      );
+      throw new SkillflagError(`Missing skill id.\n${usageLines.join("\n")}`);
     }
     if (args.includes("--json")) {
       throw new SkillflagError(

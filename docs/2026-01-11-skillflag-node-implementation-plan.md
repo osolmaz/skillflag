@@ -142,6 +142,7 @@ Goal: expose a tiny, framework-agnostic integration surface that can remain unch
    - optional: `--skill list --json`, `--skill show <id>`
 
 2. **Library entrypoint** (single function):
+
    ```ts
    export type SkillflagOptions = {
      skillsRoot: URL | string;
@@ -152,7 +153,7 @@ Goal: expose a tiny, framework-agnostic integration surface that can remain unch
 
    export async function handleSkillflag(
      argv: string[],
-     opts: SkillflagOptions
+     opts: SkillflagOptions,
    ): Promise<number>;
    ```
 

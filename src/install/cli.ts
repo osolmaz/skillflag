@@ -76,7 +76,6 @@ export async function runInstallCli(
   argv: string[],
   opts: InstallCliOptions = {},
 ): Promise<number> {
-  const stdout = opts.stdout ?? process.stdout;
   const stderr = opts.stderr ?? process.stderr;
   const stdin = opts.stdin ?? process.stdin;
   const cwd = opts.cwd ?? process.cwd();
@@ -86,9 +85,7 @@ export async function runInstallCli(
     const agent = assertAgent(parsed.agent);
     const scope = assertScope(parsed.scope);
 
-    let input:
-      | { kind: "dir"; dir: string }
-      | { kind: "tar"; stream: Readable };
+    let input: { kind: "dir"; dir: string } | { kind: "tar"; stream: Readable };
 
     if (parsed.inputPath) {
       const stat = fs.statSync(parsed.inputPath);
@@ -99,7 +96,9 @@ export async function runInstallCli(
     } else if (stdinHasData(stdin)) {
       input = { kind: "tar", stream: stdin };
     } else {
-      throw new InstallError(`Missing PATH or tar stream on stdin.\n${usageLines.join("\n")}`);
+      throw new InstallError(
+        `Missing PATH or tar stream on stdin.\n${usageLines.join("\n")}`,
+      );
     }
 
     const result = await installSkill(input, {
@@ -109,9 +108,7 @@ export async function runInstallCli(
       force: parsed.force,
     });
 
-    stderr.write(
-      `Installed ${result.skillId} to ${result.installedTo}\n`,
-    );
+    stderr.write(`Installed ${result.skillId} to ${result.installedTo}\n`);
     return 0;
   } catch (err) {
     stderr.write(`${toErrorMessage(err)}\n`);
