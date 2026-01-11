@@ -1,6 +1,6 @@
 # skillflag
 
-skillflag is a minimal CLI convention for bundling, listing and installing agent skills, so that you don't have to upload them to separate 3rd party skill registries.
+skillflag is a minimal CLI convention for bundling, listing and installing [agent skills](https://agentskills.io), so that you don't have to upload them to separate 3rd party skill registries.
 
 Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
 
