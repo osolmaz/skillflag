@@ -37,7 +37,7 @@ $ hue-cli --skill export philips-hue | npx skillflag install --agent claude --sc
 Installed skill philips-hue to ~/.claude/skills/philips-hue
 ```
 
-Even better, once this convention becomes commonplace, agents will by default do all these before you even run the tool, so when you ask it to "install hue-cli", it will know to run `--skill list` the same way a human would run `--help` after downloading a program.
+Even better, once this convention becomes commonplace, agents will by default do all these before they even run the tool, so when you ask it to "install hue-cli", it will know to run `--skill list` the same way a human would run `--help` after downloading a program, and install the necessary skills themselves without being asked to.
 
 ## Install (optional)
 
