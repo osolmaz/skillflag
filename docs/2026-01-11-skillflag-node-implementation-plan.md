@@ -21,7 +21,7 @@ Implement two deliverables in one repo:
 ## Update (installer included)
 
 - The repo will include `skill-install` as a first‑class deliverable.
-- `skill-install` will ship with a bundled demo skill in `skills/` to showcase the pipeline.
+- The repo will ship a single bundled skill in `skills/` that documents both `skillflag` and `skill-install`.
 - Simpler examples (small, minimal skills) will still be provided for clarity.
 
 ## Stack and conventions (mirror SimpleDoc)
@@ -59,7 +59,7 @@ skillflag/
   test/
     fixtures/skills/...
     integration/...
-  skills/                 # bundled skills (includes demo skill for skill-install)
+  skills/                 # bundled skill covering both skillflag + skill-install
 ```
 
 ## Bundling and distribution (npm)
@@ -67,7 +67,7 @@ skillflag/
 - Skills live at `skills/<id>/...` with `skills/<id>/SKILL.md` required.
 - `package.json` must include `skills` in `files` so the bundle ships with the npm tarball.
 - Default runtime lookup uses `skills/` relative to the installed package path (`import.meta.url`).
-- `skill-install` will use the bundled demo skill for end‑to‑end examples.
+- `skill-install` will use the bundled skill for end‑to‑end examples.
 
 ## Implementation plan
 
@@ -192,12 +192,12 @@ Goal: expose a tiny, framework-agnostic integration surface that can remain unch
 - **JSON fields**: only `id`, `digest`, and `files` are emitted. `summary`/`version` are omitted (frontmatter parsing is deferred).
 - **Tar implementation**: use `tar-stream` with fixed `mtime = 0`, `uid/gid = 0`, `uname/gname = \"\"`, lexicographic entry order.
 - **Determinism tests**: verify exported tar metadata and ordering in tests (not just structure).
-- **Installer included**: `skill-install` is implemented in this repo and ships a demo skill.
+- **Installer included**: `skill-install` is implemented in this repo and ships a single bundled skill covering both tools.
 
 ## Examples (include both simple and end-to-end)
 
+- **Bundled skill**: `skills/skillflag/` documents both `skillflag` and `skill-install`.
 - **Simple skill**: minimal `skills/hello-world/SKILL.md` for quick demos.
-- **Demo skill (installer)**: `skills/skill-install-demo/` used in documentation and tests.
 - **End‑to‑end**:
-  - `skillflag --skill export skill-install-demo | skill-install --agent portable --scope repo`
+  - `skillflag --skill export skillflag | skill-install --agent codex --scope repo`
   - `skillflag --skill list` and `--skill export <id>` remain the canonical producer examples.
