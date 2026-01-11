@@ -1,0 +1,21 @@
+{
+  "git": {
+    "requireCleanWorkingDir": true,
+    "requireBranch": "main",
+    "commitMessage": "chore(release): ${version}",
+    "tagName": "v${version}",
+    "push": true
+  },
+  "npm": {
+    "publish": true,
+    "skipChecks": true,
+    "publishArgs": ["--provenance"]
+  },
+  "github": {
+    "release": true,
+    "autoGenerate": true
+  },
+  "hooks": {
+    "before:init": "npm test"
+  }
+}
