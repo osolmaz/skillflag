@@ -83,7 +83,7 @@ Run without installing (uses bundled binaries):
 
 ```
 npx skillflag --skill list
-npx --package skillflag skill-install --agent codex --scope repo ./skills/skillflag
+npx skillflag install --agent codex --scope repo ./skills/skillflag
 ```
 
 Early‑intercept in your CLI entrypoint so stdout stays clean:
@@ -118,3 +118,11 @@ skills/
 Package distribution:
 
 - Ensure `skills/` is included in `package.json` `files` so it ships with the npm tarball.
+
+## Installing without global install
+
+Use the `skillflag install` convenience command to avoid a global install:
+
+```
+npx skillflag install --agent codex --scope repo ./skills/skillflag
+```
