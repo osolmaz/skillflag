@@ -20,23 +20,11 @@ You can also run it without installing by using `npx` (see below).
 
 ## Quick start
 
-List bundled skills:
+Any CLI that implements the Skillflag convention can be used like this:
 
 ```bash
 <tool> --skill list
-```
-
-Export a skill bundle:
-
-```bash
-<tool> --skill export <id> > skill.tar
-```
-
-Install a skill into Codex or Claude Code (repo scope):
-
-```bash
-npx skillflag install --agent codex --scope repo ./skills/<id>
-npx skillflag install --agent claude --scope repo ./skills/<id>
+<tool> --skill show <id>
 <tool> --skill export <id> | npx skillflag install --agent codex --scope repo
 <tool> --skill export <id> | npx skillflag install --agent claude --scope repo
 ```
