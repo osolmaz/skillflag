@@ -1,6 +1,4 @@
 import process from "node:process";
-import { Writable } from "node:stream";
-
 import { SkillflagError, toErrorMessage } from "./errors.js";
 import { exportSkill } from "./export.js";
 import { listSkillIds, listSkillsJson } from "./list.js";
@@ -9,8 +7,8 @@ import { showSkill } from "./show.js";
 
 export type SkillflagOptions = {
   skillsRoot: URL | string;
-  stdout?: Writable;
-  stderr?: Writable;
+  stdout?: NodeJS.WritableStream;
+  stderr?: NodeJS.WritableStream;
 };
 
 type SkillAction =

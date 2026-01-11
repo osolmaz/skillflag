@@ -1,11 +1,9 @@
-import { Writable } from "node:stream";
-
 import { collectSkillEntries, createTarStream } from "./tar.js";
 import { resolveSkillDir } from "./paths.js";
 
 async function pipeToWritable(
   stream: NodeJS.ReadableStream,
-  dest: Writable,
+  dest: NodeJS.WritableStream,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const onError = (err: Error) => {
@@ -35,7 +33,7 @@ async function pipeToWritable(
 export async function exportSkill(
   rootDir: string,
   id: string,
-  stdout: Writable,
+  stdout: NodeJS.WritableStream,
 ): Promise<void> {
   const skillDir = await resolveSkillDir(rootDir, id);
   const { entries } = await collectSkillEntries(skillDir, id);
