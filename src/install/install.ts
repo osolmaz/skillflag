@@ -60,7 +60,20 @@ export async function installSkill(
 }
 
 export function assertAgent(value: string): Agent {
-  if (value === "codex" || value === "claude") return value;
+  if (
+    value === "codex" ||
+    value === "claude" ||
+    value === "portable" ||
+    value === "vscode" ||
+    value === "copilot" ||
+    value === "amp" ||
+    value === "goose" ||
+    value === "opencode" ||
+    value === "factory" ||
+    value === "cursor"
+  ) {
+    return value;
+  }
   throw new InstallError(`Unsupported agent: ${value}`);
 }
 

@@ -21,8 +21,8 @@ type ParsedArgs = {
 
 const usageLines = [
   "Usage:",
-  "  skill-install [PATH] --agent <codex|claude> --scope <repo|user|cwd|parent|admin>",
-  "  skill-install --agent <codex|claude> --scope <repo|user|cwd|parent|admin> < tar",
+  "  skill-install [PATH] --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin>",
+  "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin> < tar",
 ];
 
 function parseArgs(args: string[]): ParsedArgs {
