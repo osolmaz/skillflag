@@ -23,22 +23,22 @@ You can also run it without installing by using `npx` (see below).
 List bundled skills:
 
 ```bash
-npx skillflag --skill list
+npx <tool> --skill list
 ```
 
 Export a skill bundle:
 
 ```bash
-npx skillflag --skill export skillflag > skillflag.tar
+npx <tool> --skill export <id> > skill.tar
 ```
 
 Install a skill into Codex or Claude Code (repo scope):
 
 ```bash
-npx skillflag install --agent codex --scope repo ./skills/skillflag
-npx skillflag install --agent claude --scope repo ./skills/skillflag
-npx skillflag --skill export skillflag | skill-install --agent codex --scope repo
-npx skillflag --skill export skillflag | skill-install --agent claude --scope repo
+npx <tool> install --agent codex --scope repo ./skills/<id>
+npx <tool> install --agent claude --scope repo ./skills/<id>
+npx <tool> --skill export <id> | skill-install --agent codex --scope repo
+npx <tool> --skill export <id> | skill-install --agent claude --scope repo
 ```
 
 ## Install (optional)
