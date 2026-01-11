@@ -35,6 +35,7 @@ Install a skill into Codex or Claude Code (repo scope):
 ```bash
 skillflag --skill export skillflag | skill-install --agent codex --scope repo
 skillflag --skill export skillflag | skill-install --agent claude --scope repo
+skillflag install --agent codex --scope repo ./skills/skillflag
 ```
 
 ## Using without global install
@@ -44,7 +45,7 @@ From the repo root:
 ```bash
 npm run build
 node dist/bin/skillflag.js --skill list
-node dist/bin/skill-install.js ./skills/skillflag --agent claude --scope repo
+node dist/bin/skillflag.js install --agent claude --scope repo ./skills/skillflag
 ```
 
 ## Bundled skill
