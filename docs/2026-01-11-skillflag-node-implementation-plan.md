@@ -49,6 +49,12 @@ skillflag/
   skills/                 # bundled skills (if any)
 ```
 
+## Bundling and distribution (npm)
+
+- Skills live at `skills/<id>/...` with `skills/<id>/SKILL.md` required.
+- `package.json` must include `skills` in `files` so the bundle ships with the npm tarball.
+- Default runtime lookup uses `skills/` relative to the installed package path (`import.meta.url`).
+
 ## Implementation plan
 
 ### Scaffolding and tooling
@@ -109,12 +115,6 @@ skillflag/
 - All errors go to stderr, exit `1` on failure.
 - JSON listing includes `digest` and conforms to the spec.
 
-## Open questions
-
-- Should `skills/` be configurable via env or CLI flag (e.g., `SKILLFLAG_ROOT`)?
-- Do we want to parse `SKILL.md` frontmatter for `summary`/`version`, or keep JSON minimal?
-- Which tar library to use (`tar`, `tar-stream`, or a tiny custom packer)?
-
 ## Interface stability plan (long-lived, minimal API)
 
 Goal: expose a tiny, framework-agnostic integration surface that can remain unchanged for years. The CLI remains the primary interface; the library API is intentionally minimal and strictly additive over time.
@@ -170,3 +170,10 @@ Goal: expose a tiny, framework-agnostic integration surface that can remain unch
 - Snapshot tests for `--skill list` output (text + JSON).
 - Golden hash tests for `--skill export` per fixture.
 - Strict checks: stdout contains only data, no banners.
+
+## Locked decisions (fully specified)
+
+- **Skills root**: fixed default to `skills/` relative to the installed package. No env/flag overrides in v0.1 (keeps interface stable).
+- **JSON fields**: only `id`, `digest`, and `files` are emitted. `summary`/`version` are omitted (frontmatter parsing is deferred).
+- **Tar implementation**: use `tar-stream` with fixed `mtime = 0`, `uid/gid = 0`, `uname/gname = \"\"`, lexicographic entry order.
+- **Determinism tests**: verify exported tar metadata and ordering in tests (not just structure).
