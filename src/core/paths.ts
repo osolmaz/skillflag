@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,7 +40,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 }
 
 export async function listSkillDirs(rootDir: string): Promise<SkillDir[]> {
-  let dirents: fs.Dirent[] = [];
+  let dirents: Dirent[] = [];
   try {
     dirents = await fs.readdir(rootDir, { withFileTypes: true });
   } catch {

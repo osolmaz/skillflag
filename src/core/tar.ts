@@ -142,9 +142,13 @@ function writeFileEntry(
   if (!entry.absPath) {
     return Promise.reject(new Error(`Missing file path for ${entry.name}`));
   }
+  if (entry.size === undefined) {
+    return Promise.reject(new Error(`Missing file size for ${entry.name}`));
+  }
+  const absPath = entry.absPath;
 
   return new Promise((resolve, reject) => {
-    const fileStream = fs.createReadStream(entry.absPath);
+    const fileStream = fs.createReadStream(absPath);
     const tarEntry = pack.entry(
       {
         name: entry.name,
