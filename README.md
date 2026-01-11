@@ -33,13 +33,28 @@ Any CLI that implements the Skillflag convention can be used like this:
 <tool> --skill export <id> | npx skillflag install --agent claude --scope repo
 ```
 
-## Install (optional)
+## Add Skillflag to your CLI
 
-If you want `skillflag` and `skill-install` on your PATH:
+1. Add the library and ship your skill directory in the package.
+2. Add a `skills/<skill-id>/SKILL.md` in your repo.
+3. In your CLI entrypoint, intercept `--skill` and delegate to Skillflag.
 
 ```bash
-npm install -g skillflag
+npm install skillflag
 ```
+
+```ts
+import { handleSkillflag } from "skillflag";
+
+if (process.argv.includes("--skill")) {
+  const exitCode = await handleSkillflag(process.argv, {
+    skillsRoot: new URL("../skills/", import.meta.url),
+  });
+  process.exit(exitCode);
+}
+```
+
+See the full guide in [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ## Bundled skill
 
