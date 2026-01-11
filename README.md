@@ -2,11 +2,13 @@
 
 Skillflag is a minimal CLI convention for listing and exporting agent skill bundles, plus a reference implementation in Node/TypeScript.
 
+Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
+
 ## Motivation
 
 Think of Skillflag as “`--help` for skills”: a stable flag-based interface to list and export bundled skills without tool‑specific install logic.
 
-AgentSkills (agentskills.io) frames the underlying concept well: “Agent Skills are folders of instructions, scripts, and resources that agents can discover and use to do things more accurately and efficiently.”
+AgentSkills ([agentskills.io](https://agentskills.io)) frames the underlying concept well: “Agent Skills are folders of instructions, scripts, and resources that agents can discover and use to do things more accurately and efficiently.”
 
 ## Install
 
@@ -44,10 +46,6 @@ npm run build
 node dist/bin/skillflag.js --skill list
 node dist/bin/skill-install.js ./skills/skillflag --agent claude --scope repo
 ```
-
-## Spec
-
-- Full specification: `docs/SKILLFLAG_SPEC.md`
 
 ## Bundled skill
 
