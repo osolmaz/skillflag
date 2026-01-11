@@ -1,5 +1,5 @@
 {
-  "name": "@osolmaz/skillflag",
+  "name": "skillflag",
   "version": "0.1.0",
   "description": "Skillflag producer CLI reference implementation.",
   "license": "MIT",

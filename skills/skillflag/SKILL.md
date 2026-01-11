@@ -70,7 +70,7 @@ skillflag --skill export skillflag | skill-install --agent codex --scope repo
 Install the library:
 
 ```
-npm install @osolmaz/skillflag
+npm install skillflag
 ```
 
 Early‑intercept in your CLI entrypoint so stdout stays clean:

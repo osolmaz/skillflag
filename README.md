@@ -13,7 +13,7 @@ AgentSkills ([agentskills.io](https://agentskills.io)) frames the underlying con
 ## Install
 
 ```bash
-npm install -g @osolmaz/skillflag
+npm install -g skillflag
 ```
 
 ## Quick start
