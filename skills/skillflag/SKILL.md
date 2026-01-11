@@ -83,7 +83,7 @@ Run without installing (uses bundled binaries):
 
 ```
 npx skillflag --skill list
-npx skill-install --agent codex --scope repo ./skills/skillflag
+npx --package skillflag skill-install --agent codex --scope repo ./skills/skillflag
 ```
 
 Early‑intercept in your CLI entrypoint so stdout stays clean:

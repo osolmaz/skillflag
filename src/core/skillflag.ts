@@ -38,7 +38,7 @@ const helpText = [
   "",
   "Prefer not to install globally? Use npx for one-off runs:",
   "  npx skillflag --skill list",
-  "  npx skill-install --agent codex --scope repo ./skills/your-skill",
+  "  npx --package skillflag skill-install --agent codex --scope repo ./skills/your-skill",
   "",
   "List available skills:",
   "  tool --skill list",
