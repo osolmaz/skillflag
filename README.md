@@ -8,7 +8,7 @@ Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
 
 Think of Skillflag as “`--help` for skills”: a stable flag-based interface to list and export bundled skills without tool‑specific install logic.
 
-AgentSkills ([agentskills.io](https://agentskills.io)) frames the underlying concept well: “Agent Skills are folders of instructions, scripts, and resources that agents can discover and use to do things more accurately and efficiently.”
+Agent Skills ([agentskills.io](https://agentskills.io)) frames the underlying concept well: “Agent Skills are folders of instructions, scripts, and resources that agents can discover and use to do things more accurately and efficiently.”
 
 ## Install (optional)
 
@@ -44,14 +44,11 @@ npm install skillflag
 ```
 
 ```ts
-import { handleSkillflag } from "skillflag";
+import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
 
-if (process.argv.includes("--skill")) {
-  const exitCode = await handleSkillflag(process.argv, {
-    skillsRoot: new URL("../skills/", import.meta.url),
-  });
-  process.exit(exitCode);
-}
+await maybeHandleSkillflag(process.argv, {
+  skillsRoot: findSkillsRoot(import.meta.url),
+});
 ```
 
 See the full guide in [docs/INTEGRATION.md](docs/INTEGRATION.md).
