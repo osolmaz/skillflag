@@ -14,7 +14,8 @@
   "homepage": "https://github.com/osolmaz/skillflag#readme",
   "type": "module",
   "bin": {
-    "skillflag": "dist/bin/skillflag.js"
+    "skillflag": "dist/bin/skillflag.js",
+    "skill-install": "dist/bin/skill-install.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
