@@ -25,7 +25,7 @@ Any CLI that implements the Skillflag convention can be used like this:
 ```bash
 <tool> --skill list
 <tool> --skill show <id>
-<tool> --skill export <id> | npx skillflag install --agent codex --scope repo
+<tool> --skill export <id> | npx skillflag install --agent codex
 <tool> --skill export <id> | npx skillflag install --agent claude --scope repo
 ```
 
