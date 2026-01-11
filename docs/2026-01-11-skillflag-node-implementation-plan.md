@@ -6,20 +6,23 @@ date: 2026-01-11
 
 ## Goal
 
-Implement a Skillflag-compliant **producer CLI** in Node.js + TypeScript (ESM), following the SimpleDoc stack/workflows, with the minimum required interface:
+Implement two deliverables in one repo:
 
-- `--skill list`
-- `--skill export <id>`
-
-Optional (nice-to-have) per spec:
-
-- `--skill list --json`
-- `--skill show <id>`
+1. A Skillflag-compliant **producer CLI** in Node.js + TypeScript (ESM), following the SimpleDoc stack/workflows, with the minimum required interface:
+   - `--skill list`
+   - `--skill export <id>`
+   - optional: `--skill list --json`, `--skill show <id>`
+2. A **skill-install** companion CLI (installer) bundled with its own demo skill so the repository can self-demonstrate end‑to‑end installation.
 
 ## Non-goals
 
-- Implementing the installer (`skill-install`).
-- Defining per-agent install paths or any install automation.
+- Defining per-agent install paths or any install automation outside the `skill-install` CLI.
+
+## Update (installer included)
+
+- The repo will include `skill-install` as a first‑class deliverable.
+- `skill-install` will ship with a bundled demo skill in `skills/` to showcase the pipeline.
+- Simpler examples (small, minimal skills) will still be provided for clarity.
 
 ## Stack and conventions (mirror SimpleDoc)
 
@@ -35,6 +38,7 @@ skillflag/
   src/
     bin/
       skillflag.ts        # CLI entry
+      skill-install.ts    # Installer CLI entry
     core/
       list.ts             # discovery logic
       export.ts           # tar export
@@ -43,10 +47,19 @@ skillflag/
       tar.ts              # deterministic tar creation
       digest.ts           # sha256 streaming
       errors.ts
+    install/
+      cli.ts              # installer arg parsing
+      extract.ts          # tar validation + extraction
+      resolve.ts          # agent/scope destination mapping
+      validate.ts         # SKILL.md + frontmatter validation
+      copy.ts             # install mode (copy)
+      link.ts             # optional mode (link)
+      json.ts             # JSON output payload
+      errors.ts
   test/
     fixtures/skills/...
     integration/...
-  skills/                 # bundled skills (if any)
+  skills/                 # bundled skills (includes demo skill for skill-install)
 ```
 
 ## Bundling and distribution (npm)
@@ -54,6 +67,7 @@ skillflag/
 - Skills live at `skills/<id>/...` with `skills/<id>/SKILL.md` required.
 - `package.json` must include `skills` in `files` so the bundle ships with the npm tarball.
 - Default runtime lookup uses `skills/` relative to the installed package path (`import.meta.url`).
+- `skill-install` will use the bundled demo skill for end‑to‑end examples.
 
 ## Implementation plan
 
@@ -106,6 +120,7 @@ skillflag/
   - export stream structure (top-level `<id>/` only, contains `SKILL.md`)
   - deterministic output (same hash on repeated export)
   - safety: reject absolute paths / `..`
+- Installer tests: tar safety, frontmatter validation, destination mapping, and install modes.
 
 ## Acceptance criteria
 
@@ -177,3 +192,12 @@ Goal: expose a tiny, framework-agnostic integration surface that can remain unch
 - **JSON fields**: only `id`, `digest`, and `files` are emitted. `summary`/`version` are omitted (frontmatter parsing is deferred).
 - **Tar implementation**: use `tar-stream` with fixed `mtime = 0`, `uid/gid = 0`, `uname/gname = \"\"`, lexicographic entry order.
 - **Determinism tests**: verify exported tar metadata and ordering in tests (not just structure).
+- **Installer included**: `skill-install` is implemented in this repo and ships a demo skill.
+
+## Examples (include both simple and end-to-end)
+
+- **Simple skill**: minimal `skills/hello-world/SKILL.md` for quick demos.
+- **Demo skill (installer)**: `skills/skill-install-demo/` used in documentation and tests.
+- **End‑to‑end**:
+  - `skillflag --skill export skill-install-demo | skill-install --agent portable --scope repo`
+  - `skillflag --skill list` and `--skill export <id>` remain the canonical producer examples.
