@@ -1,5 +1,4 @@
 import { collectSkillEntries, createTarStream } from "./tar.js";
-import { resolveSkillDir } from "./paths.js";
 
 async function pipeToWritable(
   stream: NodeJS.ReadableStream,
@@ -31,11 +30,10 @@ async function pipeToWritable(
 }
 
 export async function exportSkill(
-  rootDir: string,
+  skillDir: string,
   id: string,
   stdout: NodeJS.WritableStream,
 ): Promise<void> {
-  const skillDir = await resolveSkillDir(rootDir, id);
   const { entries } = await collectSkillEntries(skillDir, id);
   const tarStream = createTarStream(entries);
   await pipeToWritable(tarStream, stdout);

@@ -1,6 +1,6 @@
 ---
 name: skillflag
-description: Use Skillflag producer and installer CLIs (skillflag + skill-install).
+description: Skillflag producer/installer usage and install guidance (requires skill-install).
 ---
 
 # Skillflag + skill-install
@@ -73,6 +73,19 @@ Install the library:
 npm install skillflag
 ```
 
+Global install (exposes `skillflag` and `skill-install` on PATH):
+
+```
+npm install -g skillflag
+```
+
+Run without installing (uses bundled binaries):
+
+```
+npx skillflag --skill list
+npx skill-install --agent codex --scope repo ./skills/skillflag
+```
+
 Early‑intercept in your CLI entrypoint so stdout stays clean:
 
 ```ts
@@ -84,6 +97,7 @@ const args = process.argv;
 if (args.includes("--skill")) {
   const exitCode = await handleSkillflag(args, {
     skillsRoot: new URL("../skills/", import.meta.url),
+    // includeBundledSkill: false, // opt out of the built-in skillflag skill
   });
   process.exitCode = exitCode;
   return;

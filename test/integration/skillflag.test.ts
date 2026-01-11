@@ -83,7 +83,15 @@ test("--skill list outputs sorted ids", async () => {
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.text(), "");
-  assert.equal(stdout.text(), "alpha\nbeta\n");
+  assert.equal(
+    stdout.text(),
+    [
+      "alpha\tAlpha test skill",
+      "beta\tBeta test skill",
+      "skillflag\tSkillflag producer/installer usage and install guidance (requires skill-install).",
+      "",
+    ].join("\n"),
+  );
 });
 
 test("bundled skill is discoverable and exportable", async () => {
@@ -104,7 +112,8 @@ test("bundled skill is discoverable and exportable", async () => {
     .text()
     .trim()
     .split("\n")
-    .filter((line) => line.length > 0);
+    .filter((line) => line.length > 0)
+    .map((line) => line.split("\t")[0]);
   assert.ok(ids.includes("skillflag"));
 
   const exportStdout = createCapture();
@@ -142,14 +151,15 @@ test("--skill list --json matches export digest", async () => {
 
   const payload = JSON.parse(listStdout.text()) as {
     skillflag_version: string;
-    skills: Array<{ id: string; digest: string }>;
+    skills: Array<{ id: string; digest: string; summary?: string }>;
   };
 
   assert.equal(payload.skillflag_version, "0.1");
-  assert.equal(payload.skills.length, 2);
+  assert.ok(payload.skills.length >= 2);
 
   const alpha = payload.skills.find((skill) => skill.id === "alpha");
   assert.ok(alpha?.digest.startsWith("sha256:"));
+  assert.equal(alpha?.summary, "Alpha test skill");
 
   const exportStdout = createCapture();
   const exportStderr = createCapture();

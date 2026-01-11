@@ -1,14 +1,19 @@
 import process from "node:process";
 import { SkillflagError, toErrorMessage } from "./errors.js";
 import { exportSkill } from "./export.js";
-import { listSkillIds, listSkillsJson } from "./list.js";
-import { resolveSkillsRoot } from "./paths.js";
+import { listSkills, listSkillsJson } from "./list.js";
+import {
+  defaultSkillsRoot,
+  resolveSkillDirFromRoots,
+  resolveSkillsRoot,
+} from "./paths.js";
 import { showSkill } from "./show.js";
 
 export type SkillflagOptions = {
   skillsRoot: URL | string;
   stdout?: NodeJS.WritableStream;
   stderr?: NodeJS.WritableStream;
+  includeBundledSkill?: boolean;
 };
 
 type SkillAction =
@@ -76,26 +81,37 @@ export async function handleSkillflag(
   try {
     const action = parseSkillArgs(argv.slice(2));
     const skillsRoot = resolveSkillsRoot(opts.skillsRoot);
+    const bundledRoot = resolveSkillsRoot(defaultSkillsRoot());
+    const includeBundled = opts.includeBundledSkill !== false;
+    const rootDirs =
+      includeBundled && bundledRoot !== skillsRoot
+        ? [skillsRoot, bundledRoot]
+        : [skillsRoot];
 
     if (action.kind === "list") {
       if (action.json) {
-        const payload = await listSkillsJson(skillsRoot);
+        const payload = await listSkillsJson(rootDirs);
         stdout.write(JSON.stringify(payload));
       } else {
-        const ids = await listSkillIds(skillsRoot);
-        if (ids.length > 0) {
-          stdout.write(`${ids.join("\n")}\n`);
+        const skills = await listSkills(rootDirs);
+        if (skills.length > 0) {
+          const lines = skills.map((skill) =>
+            skill.summary ? `${skill.id}\t${skill.summary}` : skill.id,
+          );
+          stdout.write(`${lines.join("\n")}\n`);
         }
       }
       return 0;
     }
 
     if (action.kind === "export") {
-      await exportSkill(skillsRoot, action.id, stdout);
+      const skillDir = await resolveSkillDirFromRoots(rootDirs, action.id);
+      await exportSkill(skillDir, action.id, stdout);
       return 0;
     }
 
-    await showSkill(skillsRoot, action.id, stdout);
+    const skillDir = await resolveSkillDirFromRoots(rootDirs, action.id);
+    await showSkill(skillDir, action.id, stdout);
     return 0;
   } catch (err) {
     const message = toErrorMessage(err);

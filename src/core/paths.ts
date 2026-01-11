@@ -1,7 +1,8 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { SkillflagError } from "./errors.js";
 
@@ -11,7 +12,19 @@ export type SkillDir = {
 };
 
 export function defaultSkillsRoot(): URL {
-  return new URL("../../skills/", import.meta.url);
+  const startDir = path.dirname(fileURLToPath(import.meta.url));
+  let current = startDir;
+  while (true) {
+    const candidate = path.join(current, "package.json");
+    if (fs.existsSync(candidate)) {
+      return pathToFileURL(path.join(current, "skills/"));
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return pathToFileURL(path.join(startDir, "../../skills/"));
+    }
+    current = parent;
+  }
 }
 
 export function resolveSkillsRoot(root: URL | string): string {
@@ -32,7 +45,7 @@ export function assertValidSkillId(id: string): void {
 
 async function pathExists(filePath: string): Promise<boolean> {
   try {
-    await fs.access(filePath);
+    await fsPromises.access(filePath);
     return true;
   } catch {
     return false;
@@ -42,7 +55,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 export async function listSkillDirs(rootDir: string): Promise<SkillDir[]> {
   let dirents: Dirent[] = [];
   try {
-    dirents = await fs.readdir(rootDir, { withFileTypes: true });
+    dirents = await fsPromises.readdir(rootDir, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -73,4 +86,19 @@ export async function resolveSkillDir(
     throw new SkillflagError(`Skill not found: ${id}`);
   }
   return skillDir;
+}
+
+export async function resolveSkillDirFromRoots(
+  rootDirs: string[],
+  id: string,
+): Promise<string> {
+  assertValidSkillId(id);
+  for (const rootDir of rootDirs) {
+    const skillDir = path.join(rootDir, id);
+    const skillMd = path.join(skillDir, "SKILL.md");
+    if (await pathExists(skillMd)) {
+      return skillDir;
+    }
+  }
+  throw new SkillflagError(`Skill not found: ${id}`);
 }
