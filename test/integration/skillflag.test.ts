@@ -4,8 +4,14 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import * as tar from "tar-stream";
+import { fileURLToPath } from "node:url";
 
-import { handleSkillflag } from "../../src/core/skillflag.js";
+import {
+  handleSkillflag,
+  maybeHandleSkillflag,
+  SKILLFLAG_HELP_TEXT,
+} from "../../src/core/skillflag.js";
+import { findSkillsRoot } from "../../src/core/paths.js";
 import { createCapture } from "../helpers/capture.js";
 
 const fixturesRoot = path.resolve(process.cwd(), "test/fixtures/skills");
@@ -94,6 +100,12 @@ test("--skill list outputs sorted ids", async () => {
   );
 });
 
+test("findSkillsRoot locates repo skills directory", () => {
+  const skillsRoot = findSkillsRoot(import.meta.url);
+  const rootPath = fileURLToPath(skillsRoot);
+  assert.ok(rootPath.endsWith(`${path.sep}skills${path.sep}`));
+});
+
 test("bundled skill is discoverable and exportable", async () => {
   await fs.access(path.join(bundledSkillsRoot, "skillflag/SKILL.md"));
 
@@ -179,6 +191,52 @@ test("--skill list --json matches export digest", async () => {
   assert.equal(alpha?.digest, exportDigest);
 });
 
+test("--skill list ignores unrelated args", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--config",
+      "foo",
+      "--skill",
+      "list",
+      "--json",
+      "--other",
+      "bar",
+    ],
+    { skillsRoot: fixturesRoot, stdout: stdout.stream, stderr: stderr.stream },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  const payload = JSON.parse(stdout.text()) as {
+    skills: Array<{ id: string }>;
+  };
+  assert.ok(payload.skills.length >= 2);
+});
+
+test("maybeHandleSkillflag handles --skill without manual checks", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const handled = await maybeHandleSkillflag(
+    ["node", "cli", "--skill", "list"],
+    {
+      skillsRoot: fixturesRoot,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      exit: false,
+    },
+  );
+
+  assert.equal(handled, true);
+  assert.equal(stderr.text(), "");
+  assert.ok(stdout.text().includes("alpha"));
+});
+
 test("--skill export produces a single top-level dir", async () => {
   const stdout = createCapture();
   const stderr = createCapture();
@@ -252,13 +310,5 @@ test("--skill help shows bundled skillflag docs", async () => {
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.text(), "");
-  const output = stdout.text();
-  assert.ok(output.includes("Skillflag help"));
-  assert.ok(output.includes("npm install -g skillflag"));
-  assert.ok(output.includes("tool --skill list"));
-  assert.ok(
-    output.includes(
-      "tool --skill export <id> | skill-install --agent <agent> --scope <scope>",
-    ),
-  );
+  assert.equal(stdout.text(), `${SKILLFLAG_HELP_TEXT}\n`);
 });

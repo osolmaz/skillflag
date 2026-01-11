@@ -16,6 +16,10 @@ export type SkillflagOptions = {
   includeBundledSkill?: boolean;
 };
 
+export type SkillflagDispatchOptions = SkillflagOptions & {
+  exit?: ((code: number) => void) | false;
+};
+
 type SkillAction =
   | { kind: "list"; json: boolean }
   | { kind: "export"; id: string }
@@ -30,7 +34,7 @@ const usageLines = [
   "  --skill help",
 ];
 
-const helpText = [
+export const SKILLFLAG_HELP_TEXT = [
   "Skillflag help",
   "",
   "Install skillflag globally to get both binaries on your PATH:",
@@ -71,14 +75,7 @@ function parseSkillArgs(args: string[]): SkillAction {
   }
 
   if (action === "list") {
-    const json = args.includes("--json");
-    const extras = args.filter((_, i) => i !== idx && i !== idx + 1);
-    const invalid = extras.filter((arg) => arg !== "--json");
-    if (invalid.length > 0) {
-      throw new SkillflagError(
-        `Unexpected arguments: ${invalid.join(" ")}.\n${usageLines.join("\n")}`,
-      );
-    }
+    const json = args.slice(idx + 2).includes("--json");
     return { kind: "list", json };
   }
 
@@ -90,11 +87,6 @@ function parseSkillArgs(args: string[]): SkillAction {
     const id = args[idx + 2];
     if (!id || id.startsWith("-")) {
       throw new SkillflagError(`Missing skill id.\n${usageLines.join("\n")}`);
-    }
-    if (args.includes("--json")) {
-      throw new SkillflagError(
-        `--json is only valid for --skill list.\n${usageLines.join("\n")}`,
-      );
     }
     return { kind: action, id };
   }
@@ -144,7 +136,7 @@ export async function handleSkillflag(
     }
 
     if (action.kind === "help") {
-      stdout.write(`${helpText}\n`);
+      stdout.write(`${SKILLFLAG_HELP_TEXT}\n`);
       return 0;
     }
 
@@ -156,4 +148,20 @@ export async function handleSkillflag(
     stderr.write(`${message}\n`);
     return err instanceof SkillflagError ? err.exitCode : 1;
   }
+}
+
+export async function maybeHandleSkillflag(
+  argv: string[],
+  opts: SkillflagDispatchOptions,
+): Promise<boolean> {
+  if (!argv.includes("--skill")) {
+    return false;
+  }
+  const { exit, ...skillOpts } = opts;
+  const exitCode = await handleSkillflag(argv, skillOpts);
+  if (exit !== false) {
+    const exitFn = exit ?? process.exit;
+    exitFn(exitCode);
+  }
+  return true;
 }

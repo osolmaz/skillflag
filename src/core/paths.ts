@@ -31,7 +31,46 @@ export function resolveSkillsRoot(root: URL | string): string {
   if (root instanceof URL) {
     return fileURLToPath(root);
   }
+  if (root.startsWith("file:")) {
+    return fileURLToPath(new URL(root));
+  }
   return path.resolve(root);
+}
+
+function toPath(input: URL | string): string {
+  if (input instanceof URL) {
+    return fileURLToPath(input);
+  }
+  if (input.startsWith("file:")) {
+    return fileURLToPath(new URL(input));
+  }
+  return input;
+}
+
+export function findSkillsRoot(start: URL | string): URL {
+  let current = toPath(start);
+  try {
+    const stat = fs.statSync(current);
+    if (!stat.isDirectory()) {
+      current = path.dirname(current);
+    }
+  } catch {
+    current = path.dirname(current);
+  }
+
+  while (true) {
+    const candidate = path.join(current, "skills");
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return pathToFileURL(candidate + path.sep);
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new SkillflagError(
+        "Could not find a skills/ directory. Pass skillsRoot explicitly.",
+      );
+    }
+    current = parent;
+  }
 }
 
 export function assertValidSkillId(id: string): void {

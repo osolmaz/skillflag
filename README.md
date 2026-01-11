@@ -44,14 +44,11 @@ npm install skillflag
 ```
 
 ```ts
-import { handleSkillflag } from "skillflag";
+import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
 
-if (process.argv.includes("--skill")) {
-  const exitCode = await handleSkillflag(process.argv, {
-    skillsRoot: new URL("../skills/", import.meta.url),
-  });
-  process.exit(exitCode);
-}
+await maybeHandleSkillflag(process.argv, {
+  skillsRoot: findSkillsRoot(import.meta.url),
+});
 ```
 
 See the full guide in [docs/INTEGRATION.md](docs/INTEGRATION.md).

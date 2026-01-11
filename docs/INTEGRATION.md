@@ -40,27 +40,28 @@ If you publish via a different mechanism, just make sure the skill directory shi
 
 ## 3) Wire `--skill` early in your CLI
 
-Intercept `--skill` before your regular CLI parsing so Skillflag can take over. Example:
+Intercept `--skill` before your regular CLI parsing so Skillflag can take over. Example (ESM):
 
 ```ts
-import { handleSkillflag } from "skillflag";
+import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
 
-if (process.argv.includes("--skill")) {
-  const exitCode = await handleSkillflag(process.argv, {
-    skillsRoot: new URL("../skills/", import.meta.url),
-    // includeBundledSkill: false, // set to false to exclude skillflag's bundled skill
-  });
-  process.exit(exitCode);
-}
+await maybeHandleSkillflag(process.argv, {
+  skillsRoot: findSkillsRoot(import.meta.url),
+  // includeBundledSkill: false, // set to false to exclude skillflag's bundled skill
+});
 ```
 
-**Choosing `skillsRoot`:** point it at the packaged `skills/` directory. If your compiled CLI lives in `dist/bin/`, you may need something like:
+Example (CommonJS):
 
 ```ts
-skillsRoot: new URL("../../skills/", import.meta.url);
+const { findSkillsRoot, maybeHandleSkillflag } = require("skillflag");
+
+await maybeHandleSkillflag(process.argv, {
+  skillsRoot: findSkillsRoot(__dirname),
+});
 ```
 
-Adjust this path for your build layout.
+`findSkillsRoot()` walks upward from the given file/dir until it finds a `skills/` directory, so you don't need to hardcode build offsets. If you prefer to be explicit, you can still pass a URL or path directly.
 
 ## 4) Try it locally
 
@@ -74,5 +75,6 @@ That is all you need for a conforming producer CLI.
 
 ## Tips
 
+- If you want to avoid `process.exit`, call `maybeHandleSkillflag(..., { exit: false })` and handle the return value.
 - If you want to test without process exit, pass custom `stdout`/`stderr` streams to `handleSkillflag`.
 - Skillflag only expects to **list** and **export** skills. Avoid embedding installer logic in your CLI.

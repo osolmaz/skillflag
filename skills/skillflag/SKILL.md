@@ -90,18 +90,12 @@ Early‑intercept in your CLI entrypoint so stdout stays clean:
 
 ```ts
 // src/bin/cli.ts
-import process from "node:process";
-import { handleSkillflag } from "skillflag";
+import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
 
-const args = process.argv;
-if (args.includes("--skill")) {
-  const exitCode = await handleSkillflag(args, {
-    skillsRoot: new URL("../skills/", import.meta.url),
-    // includeBundledSkill: false, // opt out of the built-in skillflag skill
-  });
-  process.exitCode = exitCode;
-  return;
-}
+await maybeHandleSkillflag(process.argv, {
+  skillsRoot: findSkillsRoot(import.meta.url),
+  // includeBundledSkill: false, // opt out of the built-in skillflag skill
+});
 
 // ... normal CLI startup here
 ```
