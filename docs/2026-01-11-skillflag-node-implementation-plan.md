@@ -114,3 +114,59 @@ skillflag/
 - Should `skills/` be configurable via env or CLI flag (e.g., `SKILLFLAG_ROOT`)?
 - Do we want to parse `SKILL.md` frontmatter for `summary`/`version`, or keep JSON minimal?
 - Which tar library to use (`tar`, `tar-stream`, or a tiny custom packer)?
+
+## Interface stability plan (long-lived, minimal API)
+
+Goal: expose a tiny, framework-agnostic integration surface that can remain unchanged for years. The CLI remains the primary interface; the library API is intentionally minimal and strictly additive over time.
+
+### Public surface (keep tiny)
+
+1. **CLI flags** (spec-defined, stable):
+   - `--skill list`
+   - `--skill export <id>`
+   - optional: `--skill list --json`, `--skill show <id>`
+
+2. **Library entrypoint** (single function):
+   ```ts
+   export type SkillflagOptions = {
+     skillsRoot: URL | string;
+     stdout?: NodeJS.WritableStream;
+     stderr?: NodeJS.WritableStream;
+     now?: Date; // optional for tests
+   };
+
+   export async function handleSkillflag(
+     argv: string[],
+     opts: SkillflagOptions
+   ): Promise<number>;
+   ```
+
+   - **No framework types** (no commander/yargs types) to avoid lock-in.
+   - **Single function** to avoid surface creep.
+   - **Optional deps only** (stdout/stderr injection for tests).
+
+### Integration pattern (stable and safe)
+
+- **Early flag interception** in the CLI entrypoint:
+  - detect `--skill` in raw `process.argv`
+  - call `handleSkillflag` and return **before** any other CLI code runs
+  - avoids stdout noise and side effects
+
+### Compatibility rules (Lindy)
+
+- **Semver + additive changes only**: no breaking changes to CLI flags or `handleSkillflag` signature.
+- **Conservative defaults**: `skillsRoot` defaults to `skills/` (same path forever).
+- **Behavioral determinism**: tar output order + metadata fixed, so digests remain stable.
+- **Strict I/O contract**: stdout is data-only, stderr is diagnostics only.
+
+### Extension strategy (avoid breakage)
+
+- New functionality must be **new flags** or **new optional fields** in JSON.
+- Avoid new mandatory options or config files.
+- If new behavior is needed, add **new optional parameters** to `SkillflagOptions` with sensible defaults.
+
+### Test contract (pin behavior)
+
+- Snapshot tests for `--skill list` output (text + JSON).
+- Golden hash tests for `--skill export` per fixture.
+- Strict checks: stdout contains only data, no banners.
