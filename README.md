@@ -6,9 +6,9 @@ Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
 
 ## Motivation
 
-Think of skillflag as “`--help` for skills”: a stable flag-based interface to list and export bundled skills without tool‑specific install logic (see [agentskills.io](https://agentskills.io)).
+Think of skillflag as “`--help` for skills”: a stable flag-based interface to list and export bundled skills without tool‑specific install logic.
 
-Agent skills are self-contained capability packages: a folder with a `SKILL.md` (name, description, instructions) plus any scripts, templates, and references the agent needs to execute a specific workflow. Tools list these skills, the agent loads one only when relevant, and installation is just placing the folder in a known skills directory.
+[Agent skills](https://agentskills.io) are self-contained capability packages: a folder with a `SKILL.md` (name, description, instructions) plus any scripts, templates, and references the agent needs to execute a specific workflow. Tools list these skills, the agent loads one only when relevant, and installation is just placing the folder in a known skills directory.
 
 ## Install (optional)
 
