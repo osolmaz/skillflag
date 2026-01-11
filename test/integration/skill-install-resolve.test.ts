@@ -18,6 +18,31 @@ test("resolve portable repo/user roots", () => {
   process.env.XDG_CONFIG_HOME = prevXdg;
 });
 
+test("resolve codex repo/user/cwd/parent/admin roots", () => {
+  const repoRoot = resolveSkillsRoot("codex", "repo", cwd);
+  assert.equal(repoRoot, path.join(cwd, ".codex/skills"));
+
+  const userRoot = resolveSkillsRoot("codex", "user", cwd);
+  assert.equal(userRoot, path.join(os.homedir(), ".codex/skills"));
+
+  const cwdRoot = resolveSkillsRoot("codex", "cwd", cwd);
+  assert.equal(cwdRoot, path.join(cwd, ".codex/skills"));
+
+  const parentRoot = resolveSkillsRoot("codex", "parent", cwd);
+  assert.equal(parentRoot, path.join(path.resolve(cwd, ".."), ".codex/skills"));
+
+  const adminRoot = resolveSkillsRoot("codex", "admin", cwd);
+  assert.equal(adminRoot, "/etc/codex/skills");
+});
+
+test("resolve claude repo/user roots", () => {
+  const repoRoot = resolveSkillsRoot("claude", "repo", cwd);
+  assert.equal(repoRoot, path.join(cwd, ".claude/skills"));
+
+  const userRoot = resolveSkillsRoot("claude", "user", cwd);
+  assert.equal(userRoot, path.join(os.homedir(), ".claude/skills"));
+});
+
 test("resolve vscode/copilot repo roots", () => {
   const vscodeRoot = resolveSkillsRoot("vscode", "repo", cwd);
   assert.equal(vscodeRoot, path.join(cwd, ".github/skills"));
