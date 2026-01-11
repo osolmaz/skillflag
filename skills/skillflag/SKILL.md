@@ -91,7 +91,7 @@ Early‑intercept in your CLI entrypoint so stdout stays clean:
 ```ts
 // src/bin/cli.ts
 import process from "node:process";
-import { handleSkillflag } from "@osolmaz/skillflag";
+import { handleSkillflag } from "skillflag";
 
 const args = process.argv;
 if (args.includes("--skill")) {

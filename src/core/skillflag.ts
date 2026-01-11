@@ -26,6 +26,7 @@ const usageLines = [
   "  --skill list [--json]",
   "  --skill export <id>",
   "  --skill show <id>",
+  "  --skill help",
 ];
 
 function parseSkillArgs(args: string[]): SkillAction {
@@ -51,6 +52,10 @@ function parseSkillArgs(args: string[]): SkillAction {
       );
     }
     return { kind: "list", json };
+  }
+
+  if (action === "help") {
+    return { kind: "show", id: "skillflag" };
   }
 
   if (action === "export" || action === "show") {

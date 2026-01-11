@@ -239,3 +239,18 @@ test("--skill export missing id returns error", async () => {
   assert.equal(stdout.text(), "");
   assert.match(stderr.text(), /Skill not found/);
 });
+
+test("--skill help shows bundled skillflag docs", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(["node", "cli", "--skill", "help"], {
+    skillsRoot: fixturesRoot,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.ok(stdout.text().includes("# Skillflag + skill-install"));
+});
