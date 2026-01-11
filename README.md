@@ -30,7 +30,7 @@ $ hue-cli --skill export philips-hue | npx skillflag install --agent claude
 Installed skill philips-hue to .claude/skills/philips-hue
 ```
 
-You can optionally install the skill to ~/.claude:
+You can optionally install the skill to `~/.claude`, to make it global across repos:
 
 ```
 $ hue-cli --skill export philips-hue | npx skillflag install --agent claude --scope user
