@@ -252,5 +252,13 @@ test("--skill help shows bundled skillflag docs", async () => {
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.text(), "");
-  assert.ok(stdout.text().includes("# Skillflag + skill-install"));
+  const output = stdout.text();
+  assert.ok(output.includes("Skillflag help"));
+  assert.ok(output.includes("npm install -g skillflag"));
+  assert.ok(output.includes("tool --skill list"));
+  assert.ok(
+    output.includes(
+      "tool --skill export <id> | skill-install --agent <agent> --scope <scope>",
+    ),
+  );
 });
