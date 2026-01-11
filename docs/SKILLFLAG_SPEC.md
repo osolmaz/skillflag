@@ -283,7 +283,7 @@ tool --skill export tmux | tar -tf -
 ### 14.4 Export and install via an adaptor
 
 ```bash
-tool --skill export tmux | skill-install --agent claude --scope repo
+tool --skill export tmux | skill-install --agent codex --scope user
 ```
 
 ### 14.5 Export and manually place somewhere (no adaptor needed)
@@ -345,7 +345,7 @@ Install from a tar stream (e.g., produced by a Skillflag producer’s export):
 Example:
 
 ```bash
-producer --skill export tmux | skill-install --agent claude --scope repo
+producer --skill export tmux | skill-install --agent claude --scope user
 ```
 
 (Producer-side export format is defined by Skillflag: `--skill export <id>` emits a tar bundle on stdout.)
