@@ -23,12 +23,14 @@ You can also run it without installing by using `npx` (see below).
 Any CLI that implements the Skillflag convention can be used like this:
 
 ```bash
-<tool> --skill list                          # list skills the tool can export
-<tool> --skill show <id>                     # show a single skill’s metadata
+# list skills the tool can export
+<tool> --skill list
+# show a single skill’s metadata
+<tool> --skill show <id>
+# install into Codex user skills
 <tool> --skill export <id> | npx skillflag install --agent codex
-                                             # install into Codex user skills
+# install into Claude project skills
 <tool> --skill export <id> | npx skillflag install --agent claude --scope repo
-                                             # install into Claude project skills
 ```
 
 ## Install (optional)
