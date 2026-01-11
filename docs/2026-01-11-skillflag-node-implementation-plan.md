@@ -51,7 +51,7 @@ skillflag/
 
 ## Implementation plan
 
-### Phase 1 — Scaffolding and tooling
+### Scaffolding and tooling
 
 1. Initialize `package.json` similar to SimpleDoc:
    - `build` → `tsc -p tsconfig.json`
@@ -62,7 +62,7 @@ skillflag/
 3. Add `eslint.config.js` with TypeScript ESLint setup.
 4. Add `src/bin/skillflag.ts` as the CLI entry.
 
-### Phase 2 — Skill discovery (`--skill list`)
+### Skill discovery (`--skill list`)
 
 1. Define `skillsRoot` (default: `skills/` at repo/package root).
 2. List directories directly under `skills/`.
@@ -70,7 +70,7 @@ skillflag/
 4. Enforce stable lexicographic ordering.
 5. Errors go to stderr; exit code `1`.
 
-### Phase 3 — Deterministic export (`--skill export <id>`)
+### Deterministic export (`--skill export <id>`)
 
 1. Validate `<id>` exists and contains `<id>/SKILL.md`.
 2. Walk the directory, collect file list, sort lexicographically.
@@ -81,18 +81,18 @@ skillflag/
    - no `..`
 5. Stream tar to stdout, no extra output.
 
-### Phase 4 — JSON list (`--skill list --json`)
+### JSON list (`--skill list --json`)
 
 1. Produce the JSON schema from spec, with `digest` required.
 2. Compute `sha256` digest of the deterministic tar stream per skill.
 3. Include optional fields (`summary`, `version`, `files`) only when present.
 4. Omit `null` fields; empty string invalid for `version` and `digest`.
 
-### Phase 5 — Optional `--skill show <id>`
+### Optional `--skill show <id>`
 
 - Print `<id>/SKILL.md` to stdout only.
 
-### Phase 6 — Tests
+### Tests
 
 - Fixtures under `test/fixtures/skills/*`.
 - Integration tests:
