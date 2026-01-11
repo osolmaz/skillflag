@@ -8,10 +8,7 @@ import * as tar from "tar-stream";
 import { handleSkillflag } from "../../src/core/skillflag.js";
 import { createCapture } from "../helpers/capture.js";
 
-const fixturesRoot = path.resolve(
-  process.cwd(),
-  "test/fixtures/skills",
-);
+const fixturesRoot = path.resolve(process.cwd(), "test/fixtures/skills");
 const bundledSkillsRoot = path.resolve(process.cwd(), "skills");
 
 function sha256(buffer: Buffer): string {
@@ -78,10 +75,11 @@ test("--skill list outputs sorted ids", async () => {
   const stdout = createCapture();
   const stderr = createCapture();
 
-  const exitCode = await handleSkillflag(
-    ["node", "cli", "--skill", "list"],
-    { skillsRoot: fixturesRoot, stdout: stdout.stream, stderr: stderr.stream },
-  );
+  const exitCode = await handleSkillflag(["node", "cli", "--skill", "list"], {
+    skillsRoot: fixturesRoot,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.text(), "");
@@ -94,14 +92,11 @@ test("bundled skill is discoverable and exportable", async () => {
   const listStdout = createCapture();
   const listStderr = createCapture();
 
-  const listExit = await handleSkillflag(
-    ["node", "cli", "--skill", "list"],
-    {
-      skillsRoot: bundledSkillsRoot,
-      stdout: listStdout.stream,
-      stderr: listStderr.stream,
-    },
-  );
+  const listExit = await handleSkillflag(["node", "cli", "--skill", "list"], {
+    skillsRoot: bundledSkillsRoot,
+    stdout: listStdout.stream,
+    stderr: listStderr.stream,
+  });
 
   assert.equal(listExit, 0);
   assert.equal(listStderr.text(), "");

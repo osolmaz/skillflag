@@ -36,11 +36,15 @@ export async function extractSkillTarToTemp(
         }
         if (!rootName) rootName = top;
         if (rootName !== top) {
-          throw new InstallError("Tar must contain a single top-level directory.");
+          throw new InstallError(
+            "Tar must contain a single top-level directory.",
+          );
         }
 
         const relPath = rest.join("/");
-        const absPath = relPath ? path.join(tempDir, top, relPath) : path.join(tempDir, top);
+        const absPath = relPath
+          ? path.join(tempDir, top, relPath)
+          : path.join(tempDir, top);
 
         if (header.type === "directory") {
           await fs.mkdir(absPath, { recursive: true });

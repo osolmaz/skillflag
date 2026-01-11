@@ -108,10 +108,7 @@ export async function collectSkillEntries(
   return { entries, fileCount: files.length };
 }
 
-function writeDirEntry(
-  pack: tar.Pack,
-  entry: TarEntry,
-): Promise<void> {
+function writeDirEntry(pack: tar.Pack, entry: TarEntry): Promise<void> {
   return new Promise((resolve, reject) => {
     pack.entry(
       {
@@ -135,10 +132,7 @@ function writeDirEntry(
   });
 }
 
-function writeFileEntry(
-  pack: tar.Pack,
-  entry: TarEntry,
-): Promise<void> {
+function writeFileEntry(pack: tar.Pack, entry: TarEntry): Promise<void> {
   if (!entry.absPath) {
     return Promise.reject(new Error(`Missing file path for ${entry.name}`));
   }

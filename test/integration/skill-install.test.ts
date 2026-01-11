@@ -9,7 +9,9 @@ import { installSkill } from "../../src/install/install.js";
 import { collectSkillEntries, createTarStream } from "../../src/core/tar.js";
 import { makeTempDir, writeFile } from "../helpers/tmp.js";
 
-async function bufferFromStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
+async function bufferFromStream(
+  stream: NodeJS.ReadableStream,
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
   return new Promise((resolve, reject) => {
     stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
