@@ -37,3 +37,4 @@ jobs:
           DEBUG: release-it:config
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
+          NODE_DEBUG: release-it:config
