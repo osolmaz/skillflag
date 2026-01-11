@@ -10,42 +10,35 @@ Think of Skillflag as “`--help` for skills”: a stable flag-based interface t
 
 AgentSkills ([agentskills.io](https://agentskills.io)) frames the underlying concept well: “Agent Skills are folders of instructions, scripts, and resources that agents can discover and use to do things more accurately and efficiently.”
 
-## Install
-
-```bash
-npm install -g skillflag
-```
-
 ## Quick start
 
 List bundled skills:
 
 ```bash
-skillflag --skill list
+npx skillflag --skill list
 ```
 
 Export a skill bundle:
 
 ```bash
-skillflag --skill export skillflag > skillflag.tar
+npx skillflag --skill export skillflag > skillflag.tar
 ```
 
 Install a skill into Codex or Claude Code (repo scope):
 
 ```bash
-skillflag --skill export skillflag | skill-install --agent codex --scope repo
-skillflag --skill export skillflag | skill-install --agent claude --scope repo
-skillflag install --agent codex --scope repo ./skills/skillflag
+npx skillflag install --agent codex --scope repo ./skills/skillflag
+npx skillflag install --agent claude --scope repo ./skills/skillflag
+npx skillflag --skill export skillflag | skill-install --agent codex --scope repo
+npx skillflag --skill export skillflag | skill-install --agent claude --scope repo
 ```
 
-## Using without global install
+## Install (optional)
 
-From the repo root:
+If you want `skillflag` and `skill-install` on your PATH:
 
 ```bash
-npm run build
-node dist/bin/skillflag.js --skill list
-node dist/bin/skillflag.js install --agent claude --scope repo ./skills/skillflag
+npm install -g skillflag
 ```
 
 ## Bundled skill
