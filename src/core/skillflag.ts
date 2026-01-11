@@ -19,7 +19,8 @@ export type SkillflagOptions = {
 type SkillAction =
   | { kind: "list"; json: boolean }
   | { kind: "export"; id: string }
-  | { kind: "show"; id: string };
+  | { kind: "show"; id: string }
+  | { kind: "help" };
 
 const usageLines = [
   "Usage:",
@@ -28,6 +29,32 @@ const usageLines = [
   "  --skill show <id>",
   "  --skill help",
 ];
+
+const helpText = [
+  "Skillflag help",
+  "",
+  "Install skillflag globally to get both binaries on your PATH:",
+  "  npm install -g skillflag",
+  "",
+  "Prefer not to install globally? Use npx for one-off runs:",
+  "  npx skillflag --skill list",
+  "  npx skill-install --agent codex --scope repo ./skills/your-skill",
+  "",
+  "List available skills:",
+  "  tool --skill list",
+  "  tool --skill list --json",
+  "",
+  "Show a skill's documentation:",
+  "  tool --skill show <id>",
+  "",
+  "Export a skill bundle:",
+  "  tool --skill export <id>",
+  "",
+  "Install a skill bundle into an agent:",
+  "  tool --skill export <id> | skill-install --agent <agent> --scope <scope>",
+  "",
+  "For full details, read docs/SKILLFLAG_SPEC.md.",
+].join("\n");
 
 function parseSkillArgs(args: string[]): SkillAction {
   const idx = args.indexOf("--skill");
@@ -55,7 +82,7 @@ function parseSkillArgs(args: string[]): SkillAction {
   }
 
   if (action === "help") {
-    return { kind: "show", id: "skillflag" };
+    return { kind: "help" };
   }
 
   if (action === "export" || action === "show") {
@@ -112,6 +139,11 @@ export async function handleSkillflag(
     if (action.kind === "export") {
       const skillDir = await resolveSkillDirFromRoots(rootDirs, action.id);
       await exportSkill(skillDir, action.id, stdout);
+      return 0;
+    }
+
+    if (action.kind === "help") {
+      stdout.write(`${helpText}\n`);
       return 0;
     }
 
