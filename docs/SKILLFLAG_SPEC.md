@@ -356,7 +356,7 @@ producer --skill export tmux | skill-install --agent claude --scope user
 
 ```bash
 skill-install [PATH]
-  --agent <claude|codex|vscode|copilot|cursor|amp|goose|opencode|factory|portable>
+  --agent <pi|opencode|codex|claude|portable|vscode|copilot|amp|factory|cursor|goose>
   --scope <repo|user|cwd|parent|admin>
   [--root <path>]
   [--mode <copy|link>]
@@ -446,19 +446,19 @@ If the producer provides a digest (via `--skill list --json`), installers **shou
 
 This section is intentionally concrete and only covers widely-used tools with documented/observable conventions.
 
-### 7.1 `--agent portable` (recommended cross-agent target)
+### 7.1 `--agent pi` (Pi / pi-mono)
 
-Portable roots are explicitly used by Amp and Goose and described as portable across agents in Goose docs. ([Block][2])
+Pi documents these locations and discovery rules. ([Pi][9])
 
-- `--scope repo` → `<project-root>/.agents/skills/<skill_id>/`
-- `--scope user` → `${XDG_CONFIG_HOME:-~/.config}/agents/skills/<skill_id>/`
+- `repo` → `<project-root>/.pi/skills/<skill_id>/`
+- `user` → `~/.pi/agent/skills/<skill_id>/`
 
-### 7.2 `--agent claude` (Claude Code)
+### 7.2 `--agent opencode`
 
-Claude Code documents these locations and precedence. ([Claude Code][3])
+OpenCode documents these locations (plus Claude-compatible ones it also searches). ([OpenCode][6])
 
-- `repo` → `<project-root>/.claude/skills/<skill_id>/`
-- `user` → `~/.claude/skills/<skill_id>/`
+- `repo` → `<project-root>/.opencode/skill/<skill_id>/`
+- `user` → `${XDG_CONFIG_HOME:-~/.config}/opencode/skill/<skill_id>/`
 
 ### 7.3 `--agent codex` (OpenAI Codex CLI / IDE)
 
@@ -475,7 +475,21 @@ Optional advanced repo scopes (because Codex distinguishes them):
 - `cwd` → `$PWD/.codex/skills/<skill_id>/`
 - `parent` → `$PWD/../.codex/skills/<skill_id>/` ([OpenAI Developers][1])
 
-### 7.4 `--agent vscode` / `--agent copilot` (GitHub Copilot Agent Skills)
+### 7.4 `--agent claude` (Claude Code)
+
+Claude Code documents these locations and precedence. ([Claude Code][3])
+
+- `repo` → `<project-root>/.claude/skills/<skill_id>/`
+- `user` → `~/.claude/skills/<skill_id>/`
+
+### 7.5 `--agent portable` (recommended cross-agent target)
+
+Portable roots are explicitly used by Amp and Goose and described as portable across agents in Goose docs. ([Block][2])
+
+- `--scope repo` → `<project-root>/.agents/skills/<skill_id>/`
+- `--scope user` → `${XDG_CONFIG_HOME:-~/.config}/agents/skills/<skill_id>/`
+
+### 7.6 `--agent vscode` / `--agent copilot` (GitHub Copilot Agent Skills)
 
 GitHub docs + VS Code docs agree on:
 
@@ -489,7 +503,7 @@ GitHub docs + VS Code docs agree on:
 
 `user` scope: **unsupported** (docs state repo-level only “currently”). ([GitHub Docs][4])
 
-### 7.5 `--agent amp`
+### 7.7 `--agent amp`
 
 Amp states skills install to `.agents/skills/` by default and also reads `~/.config/agents/skills/` (plus Claude-compatible locations for compatibility). ([AmpCode][5])
 
@@ -497,27 +511,6 @@ Portable-first mapping (default):
 
 - `repo` → `<project-root>/.agents/skills/<skill_id>/`
 - `user` → `${XDG_CONFIG_HOME:-~/.config}/agents/skills/<skill_id>/`
-
-### 7.6 `--agent goose`
-
-Goose documents a search order that includes both portable and goose-specific locations (global + project). ([Block][2])
-
-Portable-first mapping (default):
-
-- `repo` → `<project-root>/.agents/skills/<skill_id>/`
-- `user` → `${XDG_CONFIG_HOME:-~/.config}/agents/skills/<skill_id>/`
-
-If `--native` is provided:
-
-- `repo` → `<project-root>/.goose/skills/<skill_id>/`
-- `user` → `${XDG_CONFIG_HOME:-~/.config}/goose/skills/<skill_id>/` ([Block][2])
-
-### 7.7 `--agent opencode`
-
-OpenCode documents these locations (plus Claude-compatible ones it also searches). ([OpenCode][6])
-
-- `repo` → `<project-root>/.opencode/skill/<skill_id>/`
-- `user` → `${XDG_CONFIG_HOME:-~/.config}/opencode/skill/<skill_id>/`
 
 ### 7.8 `--agent factory` (Factory Droid CLI)
 
@@ -532,6 +525,20 @@ Factory docs specify workspace and personal roots. ([Factory Documentation][7])
 - `user` → unsupported (until confirmed)
 
 If you want to avoid this uncertainty, use `--agent vscode` (for Copilot) or `--agent portable`, which are documented.
+
+### 7.10 `--agent goose`
+
+Goose documents a search order that includes both portable and goose-specific locations (global + project). ([Block][2])
+
+Portable-first mapping (default):
+
+- `repo` → `<project-root>/.agents/skills/<skill_id>/`
+- `user` → `${XDG_CONFIG_HOME:-~/.config}/agents/skills/<skill_id>/`
+
+If `--native` is provided:
+
+- `repo` → `<project-root>/.goose/skills/<skill_id>/`
+- `user` → `${XDG_CONFIG_HOME:-~/.config}/goose/skills/<skill_id>/` ([Block][2])
 
 ## 8) Output conventions
 
@@ -577,3 +584,4 @@ This keeps the spec future-proof without baking in every new agent.
 [6]: https://opencode.ai/docs/skills/ "Agent Skills"
 [7]: https://docs.factory.ai/cli/configuration/skills "Skills - Factory Documentation"
 [8]: https://forum.cursor.com/t/adding-project-rules-becomes-skills-in-2-3-8/147499 "Adding project rules becomes skills in 2.3.8 - Bug Reports - Cursor - Community Forum"
+[9]: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md "Skills - pi-mono"
