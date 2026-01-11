@@ -58,11 +58,20 @@ skillflag --skill export skillflag | skill-install --agent codex --scope repo
 - Producer CLIs MUST implement:
   - `--skill list`
   - `--skill export <id>`
+- `--skill list --json` MAY be provided and must emit a single JSON object to stdout.
 - `--skill list` writes only skill IDs to stdout (no banners).
 - `--skill export <id>` streams a tar with a single top‑level `<id>/` and `<id>/SKILL.md`.
 - Export output MUST be deterministic: sorted entries, fixed `mtime = 0`, `uid/gid = 0`.
+- All errors go to stderr, exit code `1` on failure.
+- Skills should be bundled under `skills/<id>/SKILL.md`.
 
 ## Adding Skillflag to a Node CLI (library integration)
+
+Install the library:
+
+```
+npm install @osolmaz/skillflag
+```
 
 Early‑intercept in your CLI entrypoint so stdout stays clean:
 
@@ -91,3 +100,7 @@ skills/
     SKILL.md
     templates/...
 ```
+
+Package distribution:
+
+- Ensure `skills/` is included in `package.json` `files` so it ships with the npm tarball.
