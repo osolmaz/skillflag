@@ -48,9 +48,5 @@ jobs:
           VERSION=$(node -p 'require("./package.json").version')
           npm run release:ci -- --increment "$VERSION"
         env:
-          # DEBUG must be set — release-it passes `log: null` to Octokit
-          # when debug is off, which crashes on `log.debug()` calls.
-          # This is a release-it bug (v17). The workaround is enabling debug.
-          DEBUG: "release-it:*"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
