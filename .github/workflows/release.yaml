@@ -3,6 +3,11 @@ name: Release
 on:
   # PR-based releases: main is branch-protected. Bump `package.json` version via PR, then run this workflow to tag/publish.
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (must match package.json)"
+        required: false
+        type: string
 
 jobs:
   release:
@@ -25,7 +30,13 @@ jobs:
       - run: npm run lint
       - name: Release (use version from package.json)
         run: |
-          VERSION=$(node -p 'require("./package.json").version')
+          VERSION_INPUT="${{ inputs.version }}"
+          VERSION_PKG=$(node -p 'require("./package.json").version')
+          if [ -n "$VERSION_INPUT" ] && [ "$VERSION_INPUT" != "$VERSION_PKG" ]; then
+            echo "Input version $VERSION_INPUT does not match package.json ($VERSION_PKG)"
+            exit 1
+          fi
+          VERSION=${VERSION_INPUT:-$VERSION_PKG}
           npm run release:ci -- --increment "$VERSION"
         env:
           DEBUG: release-it:config
