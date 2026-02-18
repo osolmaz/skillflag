@@ -1,12 +1,15 @@
 {
   "git": {
-    "requireCleanWorkingDir": true,
+    "requireCleanWorkingDir": false,
     "requireBranch": "main",
-    "commitMessage": "chore(release): ${version}",
+    "commit": false,
+    "tag": true,
     "tagName": "v${version}",
-    "push": true
+    "push": true,
+    "pushArgs": ["--tags"]
   },
   "npm": {
+    "version": false,
     "publish": true,
     "skipChecks": true,
     "publishArgs": ["--provenance"]
