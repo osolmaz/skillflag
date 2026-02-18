@@ -1,17 +1,8 @@
 name: Release
 
 on:
+  # PR-based releases: main is branch-protected. Bump `package.json` version via PR, then run this workflow to tag/publish.
   workflow_dispatch:
-    inputs:
-      increment:
-        description: "Version bump (patch, minor, major)"
-        required: true
-        default: "patch"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 jobs:
   release:
@@ -32,7 +23,10 @@ jobs:
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
       - run: npm ci
       - run: npm run lint
-      - run: npm run release:ci -- --increment ${{ inputs.increment }}
+      - name: Release (use version from package.json)
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          npm run release:ci -- --increment "$VERSION"
         env:
           DEBUG: release-it:config
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

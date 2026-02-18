@@ -2,11 +2,13 @@
   "git": {
     "requireCleanWorkingDir": true,
     "requireBranch": "main",
-    "commitMessage": "chore(release): ${version}",
+    "commit": false,
+    "tag": true,
     "tagName": "v${version}",
     "push": true
   },
   "npm": {
+    "version": false,
     "publish": true,
     "skipChecks": true,
     "publishArgs": ["--provenance"]
