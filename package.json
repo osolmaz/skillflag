@@ -13,6 +13,14 @@
   },
   "homepage": "https://github.com/osolmaz/skillflag#readme",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "bin": {
     "skillflag": "dist/bin/skillflag.js",
     "skill-install": "dist/bin/skill-install.js"
