@@ -9,6 +9,7 @@
     "pushArgs": ["--tags"]
   },
   "npm": {
+    "allowSameVersion": true,
     "version": false,
     "publish": true,
     "skipChecks": true,
