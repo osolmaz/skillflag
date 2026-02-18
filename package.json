@@ -1,6 +1,6 @@
 {
   "name": "skillflag",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "Skillflag producer CLI reference implementation.",
   "license": "MIT",
   "author": "Onur Solmaz <info@solmaz.io>",

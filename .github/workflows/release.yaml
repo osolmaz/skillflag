@@ -32,9 +32,15 @@ jobs:
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
       - run: npm ci
       - run: npm run lint
-      - run: npm run release:ci -- --increment ${{ inputs.increment }}
+      # Bump version in working directory only (no git commit).
+      # release-it reads the bumped package.json, publishes to npm,
+      # pushes a tag, and creates a GitHub release — but never pushes
+      # the version commit, so branch protection is never hit.
+      - run: npm version ${{ inputs.increment }} --no-git-tag-version
+      - name: Release
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          npm run release:ci -- --increment "$VERSION"
         env:
-          DEBUG: release-it:config
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
-          NODE_DEBUG: release-it:config
