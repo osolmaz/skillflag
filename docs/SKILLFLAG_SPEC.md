@@ -237,16 +237,9 @@ Skill IDs **SHOULD** be:
 
 Rationale: IDs appear in shell scripts and filesystem paths.
 
-## 12. Metadata (optional, minimal)
+## 12. Metadata
 
-Skillflag does not require a manifest file, but implementations **MAY** include metadata as YAML frontmatter at the top of `SKILL.md`.
-
-If metadata exists, it **SHOULD** be treated as advisory by installers.
-
-Critically:
-
-- **Producer CLIs MUST NOT execute** any bundled scripts as part of export.
-- Installers **SHOULD NOT execute** bundled scripts by default.
+Skill directories **MUST** conform to the Agent Skills specification (https://agentskills.io/specification). Skillflag does not define additional `SKILL.md` format requirements.
 
 ## 13. Security considerations
 
@@ -404,11 +397,7 @@ Rationale: avoid silent installs into the wrong agent/tool.
 By default, `skill-install` **must** validate:
 
 - `SKILL.md` exists at bundle root.
-- YAML frontmatter exists and includes:
-  - `name` (string)
-  - `description` (string)
-
-This matches major implementations’ documented expectations. ([Claude Code][3])
+- `name` and `description` are present in `SKILL.md` metadata (as required by the Agent Skills specification).
 
 ### 3.2 Skill ID selection (destination folder name)
 
