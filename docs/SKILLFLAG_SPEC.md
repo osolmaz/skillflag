@@ -85,6 +85,10 @@ Skillflag does **not** require any particular command substructure (`tool skills
 
 A Skillflag-compliant producer CLI **MAY** implement `--skill install [<id>]` as a convenience that combines export + install in a single step.
 
+Producers **MUST NOT** implement agent-specific path resolution.
+
+The `--skill install` convenience **MUST** delegate installation to a Skillflag-compliant installer (e.g. `skill-install`). Producers are responsible for skill discovery and export; installers are responsible for agent-specific placement.
+
 When invoked without required arguments (`agent`, `scope`) and stdin is a TTY, implementations **SHOULD** offer an interactive selection flow.
 
 The interactive behavior, prompts, defaults, and UX are implementation-defined.
