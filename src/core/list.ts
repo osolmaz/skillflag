@@ -4,6 +4,7 @@ import path from "node:path";
 import { collectSkillEntries, createTarStream } from "./tar.js";
 import { digestStreamSha256 } from "./digest.js";
 import { listSkillDirs } from "./paths.js";
+import { parseFrontmatter } from "../shared/frontmatter.js";
 
 export type SkillListJsonItem = {
   id: string;
@@ -24,30 +25,6 @@ type SkillInfo = {
   summary?: string;
   version?: string;
 };
-
-function parseFrontmatter(content: string): Record<string, string> {
-  if (!content.startsWith("---\n")) return {};
-  const endIdx = content.indexOf("\n---", 4);
-  if (endIdx === -1) return {};
-  const block = content.slice(4, endIdx + 1);
-  const lines = block.split("\n").filter((line) => line.trim().length > 0);
-  const fields: Record<string, string> = {};
-  for (const line of lines) {
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    let value = line.slice(idx + 1).trim();
-    if (!key || !value) continue;
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1).trim();
-    }
-    fields[key] = value;
-  }
-  return fields;
-}
 
 async function readSkillInfo(dir: string, id: string): Promise<SkillInfo> {
   const skillMdPath = path.join(dir, "SKILL.md");

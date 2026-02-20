@@ -15,14 +15,19 @@ import {
 import type { Option } from "@clack/prompts";
 
 import { InstallError, toErrorMessage } from "./errors.js";
+import { installSkill, type InstallInput } from "./install.js";
 import {
+  AGENTS,
   assertAgent,
   assertScope,
-  installSkill,
-  type InstallInput,
-} from "./install.js";
-import { resolveSkillsRoot, type Agent, type Scope } from "./resolve.js";
+  assertSupportedAgentScopes,
+  resolveSkillsRoot,
+  sharedScopesForAgents,
+  type Agent,
+  type Scope,
+} from "./resolve.js";
 import { assertSkillDir, readSkillMetadata } from "./validate.js";
+import { uniqueValues } from "../utils/collections.js";
 
 export type InstallCliOptions = {
   stdin?: Readable;
@@ -33,6 +38,39 @@ export type InstallCliOptions = {
   providedInputs?: InstallInput[];
   providedSkillId?: string;
   providedSkillIds?: string[];
+  promptApi?: InstallPromptApi;
+};
+
+export type InstallPromptApi = {
+  confirm: (opts: Parameters<typeof confirm>[0]) => Promise<boolean | symbol>;
+  intro: (
+    message?: string,
+    opts?: { input?: Readable; output?: Writable },
+  ) => void;
+  isCancel: (value: unknown) => value is symbol;
+  multiselect: <Value>(opts: {
+    message: string;
+    options: Option<Value>[];
+    initialValues?: Value[];
+    required?: boolean;
+    input?: Readable;
+    output?: Writable;
+  }) => Promise<Value[] | symbol>;
+  note: (
+    message?: string,
+    title?: string,
+    opts?: { input?: Readable; output?: Writable },
+  ) => void;
+  outro: (
+    message?: string,
+    opts?: { input?: Readable; output?: Writable },
+  ) => void;
+  spinner: (opts?: { input?: Readable; output?: Writable }) => {
+    start: (message?: string) => void;
+    stop: (message?: string) => void;
+    error: (message?: string) => void;
+  };
+  text: (opts: Parameters<typeof text>[0]) => Promise<string | symbol>;
 };
 
 type ParsedArgs = {
@@ -85,58 +123,35 @@ const usageLines = [
   "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor>[,<agent>...] [--agent <agent>[,<agent>...]] --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force] < tar",
 ];
 
-const agentOptions: Option<Agent>[] = [
-  {
-    value: "codex",
-    label: "codex",
-    hint: "OpenAI Codex CLI skills (.codex/skills or CODEX_HOME/skills)",
-  },
-  {
-    value: "claude",
-    label: "claude",
-    hint: "Claude Code skills (.claude/skills)",
-  },
-  {
-    value: "portable",
-    label: "portable",
-    hint: "Portable agents skills (.agents/skills)",
-  },
-  {
-    value: "vscode",
-    label: "vscode",
-    hint: "VS Code skills in .github/skills",
-  },
-  {
-    value: "copilot",
-    label: "copilot",
-    hint: "GitHub Copilot skills in .github/skills",
-  },
-  {
-    value: "amp",
-    label: "amp",
-    hint: "Amp agent skills (.agents/skills)",
-  },
-  {
-    value: "goose",
-    label: "goose",
-    hint: "Goose agent skills (.agents/skills)",
-  },
-  {
-    value: "opencode",
-    label: "opencode",
-    hint: "OpenCode skills (.opencode/skill)",
-  },
-  {
-    value: "factory",
-    label: "factory",
-    hint: "Factory skills (.factory/skills)",
-  },
-  {
-    value: "cursor",
-    label: "cursor",
-    hint: "Cursor skills (.cursor/skills)",
-  },
-];
+const defaultPromptApi: InstallPromptApi = {
+  confirm,
+  intro,
+  isCancel,
+  multiselect,
+  note,
+  outro,
+  spinner,
+  text,
+};
+
+const agentHints: Record<Agent, string> = {
+  codex: "OpenAI Codex CLI skills (.codex/skills or CODEX_HOME/skills)",
+  claude: "Claude Code skills (.claude/skills)",
+  portable: "Portable agents skills (.agents/skills)",
+  vscode: "VS Code skills in .github/skills",
+  copilot: "GitHub Copilot skills in .github/skills",
+  amp: "Amp agent skills (.agents/skills)",
+  goose: "Goose agent skills (.agents/skills)",
+  opencode: "OpenCode skills (.opencode/skill)",
+  factory: "Factory skills (.factory/skills)",
+  cursor: "Cursor skills (.cursor/skills)",
+};
+
+const agentOptions: Option<Agent>[] = AGENTS.map((agent) => ({
+  value: agent,
+  label: agent,
+  hint: agentHints[agent],
+}));
 
 const scopeDescriptions: Record<Scope, string> = {
   repo: "Install to the current git repo root.",
@@ -145,29 +160,6 @@ const scopeDescriptions: Record<Scope, string> = {
   cwd: "Install relative to the current working directory.",
   parent: "Install relative to the parent of the current directory.",
 };
-
-const supportedScopesByAgent: Record<Agent, Scope[]> = {
-  codex: ["repo", "user", "admin", "cwd", "parent"],
-  claude: ["repo", "user"],
-  portable: ["repo", "user"],
-  vscode: ["repo"],
-  copilot: ["repo"],
-  amp: ["repo", "user"],
-  goose: ["repo", "user"],
-  opencode: ["repo", "user"],
-  factory: ["repo", "user"],
-  cursor: ["repo"],
-};
-
-function uniqueValues<T>(values: T[]): T[] {
-  const out: T[] = [];
-  for (const value of values) {
-    if (!out.includes(value)) {
-      out.push(value);
-    }
-  }
-  return out;
-}
 
 function parseScopeValues(value: string | undefined): string[] {
   if (!value || value.startsWith("-")) {
@@ -272,27 +264,11 @@ function asScope(value: string | undefined): Scope | undefined {
 }
 
 function asScopes(values: string[]): Scope[] {
-  return values
-    .map((value) => asScope(value))
-    .filter((value): value is Scope => value !== undefined);
-}
-
-function getSharedScopes(agents: Agent[]): Scope[] {
-  if (agents.length === 0) return [];
-  return supportedScopesByAgent[agents[0]].filter((scope) =>
-    agents.every((agent) => supportedScopesByAgent[agent].includes(scope)),
+  return uniqueValues(
+    values
+      .map((value) => asScope(value))
+      .filter((value): value is Scope => value !== undefined),
   );
-}
-
-function assertSupportedAgentScopes(agents: Agent[], scopes: Scope[]): void {
-  for (const agent of agents) {
-    const supportedScopes = supportedScopesByAgent[agent];
-    for (const scope of scopes) {
-      if (!supportedScopes.includes(scope)) {
-        throw new InstallError(`Unsupported agent/scope: ${agent} ${scope}`);
-      }
-    }
-  }
 }
 
 function validateRequiredFlags(parsed: ParsedArgs): ResolvedInstallArgs {
@@ -374,9 +350,10 @@ function validatePathPrompt(value: string | undefined): string | undefined {
 function cancelWizard(
   stdin: Readable,
   stdout: Writable,
+  promptApi: InstallPromptApi,
   message = "Install cancelled.",
 ): null {
-  outro(message, { input: stdin, output: stdout });
+  promptApi.outro(message, { input: stdin, output: stdout });
   return null;
 }
 
@@ -483,21 +460,35 @@ function buildInstallPlan(
   return plan;
 }
 
-function dedupeInstallPlan(plan: InstallPlanItem[]): InstallPlanItem[] {
-  const seenByDestination = new Map<string, Set<PreparedInstallSource>>();
-  const deduped: InstallPlanItem[] = [];
-
+function assertNoInstallCollisions(plan: InstallPlanItem[]): void {
+  const plansByDestination = new Map<string, InstallPlanItem[]>();
   for (const item of plan) {
-    const seenSources = seenByDestination.get(item.destination) ?? new Set();
-    if (seenSources.has(item.source)) {
-      continue;
-    }
-    seenSources.add(item.source);
-    seenByDestination.set(item.destination, seenSources);
-    deduped.push(item);
+    const entries = plansByDestination.get(item.destination) ?? [];
+    entries.push(item);
+    plansByDestination.set(item.destination, entries);
   }
 
-  return deduped;
+  const collisions = [...plansByDestination.entries()]
+    .filter(([, items]) => items.length > 1)
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  if (collisions.length === 0) {
+    return;
+  }
+
+  const lines = ["Install destination collisions detected:"];
+  for (const [destination, items] of collisions) {
+    lines.push(`- ${destination}`);
+    for (const item of items) {
+      lines.push(
+        `  - ${item.source.skillIdHint} @ ${item.agent}/${item.scope} (source: ${item.source.source})`,
+      );
+    }
+  }
+  lines.push(
+    "Resolve collisions by changing skill IDs, sources, --agent, or --scope so each combination has a unique destination.",
+  );
+  throw new InstallError(lines.join("\n"));
 }
 
 async function runInstallWizard(
@@ -506,13 +497,14 @@ async function runInstallWizard(
   stdout: Writable,
   cwd: string,
   provided: ProvidedInstallInputs,
+  promptApi: InstallPromptApi,
 ): Promise<WizardResult | null> {
-  intro("skill-install wizard", { input: stdin, output: stdout });
+  promptApi.intro("skill-install wizard", { input: stdin, output: stdout });
 
   let inputPaths = parsed.inputPaths;
   if (provided.inputs.length === 0 && inputPaths.length === 0) {
     const defaultPath = cwd;
-    const pathValue = await text({
+    const pathValue = await promptApi.text({
       message:
         "PATH to skill directory (comma-separated for multiple, defaults to current directory)",
       placeholder: defaultPath,
@@ -521,7 +513,9 @@ async function runInstallWizard(
       input: stdin,
       output: stdout,
     });
-    if (isCancel(pathValue)) return cancelWizard(stdin, stdout);
+    if (promptApi.isCancel(pathValue)) {
+      return cancelWizard(stdin, stdout, promptApi);
+    }
     inputPaths = parsePathList(pathValue.trim() || defaultPath);
   }
 
@@ -535,7 +529,7 @@ async function runInstallWizard(
   } else if (agentOptions.length === 1) {
     agents = [assertAgent(agentOptions[0].value)];
   } else {
-    const agentValues = await multiselect({
+    const agentValues = await promptApi.multiselect({
       message: "Agent targets",
       options: agentOptions,
       initialValues: parsedAgents.length > 0 ? parsedAgents : [],
@@ -543,11 +537,13 @@ async function runInstallWizard(
       input: stdin,
       output: stdout,
     });
-    if (isCancel(agentValues)) return cancelWizard(stdin, stdout);
+    if (promptApi.isCancel(agentValues)) {
+      return cancelWizard(stdin, stdout, promptApi);
+    }
     agents = uniqueValues(agentValues.map((value) => assertAgent(value)));
   }
 
-  const supportedScopes = getSharedScopes(agents);
+  const supportedScopes = sharedScopesForAgents(agents);
   if (supportedScopes.length === 0) {
     throw new InstallError(
       `No shared scopes for selected agents: ${agents.join(", ")}`,
@@ -566,7 +562,7 @@ async function runInstallWizard(
       label: scope,
       hint: scopeDescriptions[scope],
     }));
-    const scopeValues = await multiselect({
+    const scopeValues = await promptApi.multiselect({
       message: "Scope targets",
       options: scopeOptions,
       initialValues: parsedScopes.length > 0 ? parsedScopes : [],
@@ -574,24 +570,28 @@ async function runInstallWizard(
       input: stdin,
       output: stdout,
     });
-    if (isCancel(scopeValues)) return cancelWizard(stdin, stdout);
+    if (promptApi.isCancel(scopeValues)) {
+      return cancelWizard(stdin, stdout, promptApi);
+    }
     scopes = uniqueValues(scopeValues.map((scope) => assertScope(scope)));
   }
 
-  const forceValue = await confirm({
+  const forceValue = await promptApi.confirm({
     message: "Force overwrite if the destination already exists? (--force)",
     initialValue: parsed.force,
     input: stdin,
     output: stdout,
   });
-  if (isCancel(forceValue)) return cancelWizard(stdin, stdout);
+  if (promptApi.isCancel(forceValue)) {
+    return cancelWizard(stdin, stdout, promptApi);
+  }
   const force = forceValue;
 
   assertSupportedAgentScopes(agents, scopes);
 
   const sources = await resolveInstallSources(inputPaths, stdin, provided);
   const plan = buildInstallPlan(sources, agents, scopes, cwd);
-  const executionPlan = dedupeInstallPlan(plan);
+  assertNoInstallCollisions(plan);
 
   const sourceLines = sources.map(
     (source) => `${source.skillIdHint} <= ${source.source}`,
@@ -601,14 +601,14 @@ async function runInstallWizard(
       `${item.source.skillIdHint} @ ${item.agent}/${item.scope} -> ${item.destination}`,
   );
 
-  note(
+  promptApi.note(
     [
       `Sources (${sources.length}):`,
       ...sourceLines,
       `Agents (${agents.length}): ${agents.join(", ")}`,
       `Scopes (${scopes.length}): ${scopes.join(", ")}`,
       `Matrix: ${sources.length} skill(s) × ${agents.length} agent(s) × ${scopes.length} scope(s) = ${plan.length} combination(s)`,
-      `Execution targets: ${executionPlan.length}`,
+      `Execution targets: ${plan.length}`,
       `Planned combinations (${plan.length}):`,
       ...installLines,
       `Force: ${force ? "yes" : "no"}`,
@@ -617,13 +617,15 @@ async function runInstallWizard(
     { input: stdin, output: stdout },
   );
 
-  const confirmed = await confirm({
+  const confirmed = await promptApi.confirm({
     message: "Proceed with install?",
     initialValue: true,
     input: stdin,
     output: stdout,
   });
-  if (isCancel(confirmed) || !confirmed) return cancelWizard(stdin, stdout);
+  if (promptApi.isCancel(confirmed) || !confirmed) {
+    return cancelWizard(stdin, stdout, promptApi);
+  }
 
   return {
     args: { inputPaths, agents, scopes, force },
@@ -638,13 +640,14 @@ async function runInstall(
   stdout: Writable,
   cwd: string,
   useSpinner: boolean,
+  promptApi: InstallPromptApi,
 ): Promise<InstallExecutionResult[]> {
   const plan = buildInstallPlan(sources, args.agents, args.scopes, cwd);
-  const executionPlan = dedupeInstallPlan(plan);
+  assertNoInstallCollisions(plan);
 
   const execute = async (): Promise<InstallExecutionResult[]> => {
     const results: InstallExecutionResult[] = [];
-    for (const item of executionPlan) {
+    for (const item of plan) {
       const result = await installSkill(item.source.makeInput(), {
         agent: item.agent,
         scope: item.scope,
@@ -660,10 +663,8 @@ async function runInstall(
     return execute();
   }
 
-  const s = spinner({ input: stdin, output: stdout });
-  s.start(
-    `Installing ${executionPlan.length} target${executionPlan.length === 1 ? "" : "s"}...`,
-  );
+  const s = promptApi.spinner({ input: stdin, output: stdout });
+  s.start(`Installing ${plan.length} target${plan.length === 1 ? "" : "s"}...`);
   try {
     const result = await execute();
     s.stop("Install complete.");
@@ -682,6 +683,7 @@ export async function runInstallCli(
   const stderr = (opts.stderr ?? process.stderr) as Writable;
   const stdin = opts.stdin ?? process.stdin;
   const cwd = opts.cwd ?? process.cwd();
+  const promptApi = opts.promptApi ?? defaultPromptApi;
 
   try {
     const parsed = parseArgs(argv.slice(2));
@@ -713,6 +715,7 @@ export async function runInstallCli(
           stdout,
           cwd,
           provided,
+          promptApi,
         );
         if (!wizardResult) {
           return 1;
@@ -736,6 +739,7 @@ export async function runInstallCli(
       stdout,
       cwd,
       wizardUsed,
+      promptApi,
     );
 
     for (const result of results) {
@@ -744,7 +748,7 @@ export async function runInstallCli(
       );
     }
     if (wizardUsed) {
-      outro("Done.", { input: stdin, output: stdout });
+      promptApi.outro("Done.", { input: stdin, output: stdout });
     }
     return 0;
   } catch (err) {

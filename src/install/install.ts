@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 
-import { InstallError } from "./errors.js";
 import { assertSkillDir, readSkillMetadata } from "./validate.js";
 import { extractSkillTarToTemp } from "./extract.js";
 import { resolveSkillsRoot, type Agent, type Scope } from "./resolve.js";
@@ -57,35 +56,4 @@ export async function installSkill(
   } finally {
     await cleanup();
   }
-}
-
-export function assertAgent(value: string): Agent {
-  if (
-    value === "codex" ||
-    value === "claude" ||
-    value === "portable" ||
-    value === "vscode" ||
-    value === "copilot" ||
-    value === "amp" ||
-    value === "goose" ||
-    value === "opencode" ||
-    value === "factory" ||
-    value === "cursor"
-  ) {
-    return value;
-  }
-  throw new InstallError(`Unsupported agent: ${value}`);
-}
-
-export function assertScope(value: string): Scope {
-  if (
-    value === "repo" ||
-    value === "user" ||
-    value === "admin" ||
-    value === "cwd" ||
-    value === "parent"
-  ) {
-    return value;
-  }
-  throw new InstallError(`Unsupported scope: ${value}`);
 }
