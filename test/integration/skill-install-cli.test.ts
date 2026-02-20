@@ -25,7 +25,7 @@ function createTtyStdin(): Readable {
 
 function createPipeStdin(buffer: Buffer): Readable {
   const stdin = Readable.from([buffer]);
-  (stdin as Readable & { isTTY?: boolean }).isTTY = false;
+  (stdin as Readable & { fd?: number }).fd = 0;
   return stdin;
 }
 
@@ -45,7 +45,7 @@ function createCountingPipeStdin(totalBytes: number): {
       this.push(Buffer.alloc(size, 0x78));
     },
   });
-  (stdin as Readable & { isTTY?: boolean }).isTTY = false;
+  (stdin as Readable & { fd?: number }).fd = 0;
   return {
     stdin,
     pushedBytes: () => pushed,
@@ -167,6 +167,22 @@ test("runInstallCli requires flags without an interactive tty", async () => {
   assert.equal(exitCode, 1);
   assert.match(stderr.text(), /Missing required flags/);
   assert.match(stderr.text(), /skill-install \[PATH/);
+});
+
+test("runInstallCli supports --help", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await runInstallCli(["node", "skill-install", "--help"], {
+    stdin: Readable.from([]),
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.text(), /Usage:/);
+  assert.match(stdout.text(), /--help/);
+  assert.equal(stderr.text(), "");
 });
 
 test("runInstallCli uses tty prompts when stdin is piped and required flags are missing", async (t) => {

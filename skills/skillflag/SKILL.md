@@ -47,6 +47,18 @@ Tar stream input (from producer):
 skillflag --skill export skillflag | skill-install --agent codex --scope repo
 ```
 
+Tar stream input with interactive target selection (when a TTY is available):
+
+```
+skillflag --skill export skillflag | skill-install
+```
+
+Show installer usage/help:
+
+```
+skill-install --help
+```
+
 ## Notes
 
 - `skillflag` is the producer interface; it never installs.

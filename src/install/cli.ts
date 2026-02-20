@@ -18,6 +18,7 @@ import { InstallError, toErrorMessage } from "./errors.js";
 import { installSkill, type InstallInput } from "./install.js";
 import {
   AGENTS,
+  SCOPES,
   assertAgent,
   assertScope,
   assertSupportedAgentScopes,
@@ -79,6 +80,7 @@ type ParsedArgs = {
   agents: string[];
   scopes: string[];
   force: boolean;
+  help: boolean;
 };
 
 type ResolvedInstallArgs = {
@@ -124,11 +126,31 @@ type PromptTtyStreams = {
   close: () => void;
 };
 
+const agentList = AGENTS.join(", ");
+const scopeList = SCOPES.join(", ");
+
 const usageLines = [
   "Usage:",
-  "  skill-install [PATH ...] --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor>[,<agent>...] [--agent <agent>[,<agent>...]] --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force]",
-  "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor>[,<agent>...] [--agent <agent>[,<agent>...]] --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force] < tar",
+  "  skill-install [PATH ...] [--agent <agent>[,<agent>...]] [--scope <scope>[,<scope>...]] [--force]",
+  "",
+  "Input:",
+  "  PATH ...            Skill directory path(s) containing SKILL.md.",
+  "  stdin tar stream    If PATH is omitted, reads a tar bundle from stdin.",
+  "",
+  "Options:",
+  "  --agent <values>    Target agent(s); repeat or use comma-separated values.",
+  `                      Supported agents: ${agentList}`,
+  "  --scope <values>    Target scope(s); repeat or use comma-separated values.",
+  `                      Supported scopes: ${scopeList}`,
+  "  --force             Overwrite destination if it already exists.",
+  "  -h, --help          Show this help.",
+  "",
+  "Behavior:",
+  "  If --agent or --scope is missing and an interactive TTY is available,",
+  "  the installer launches a wizard to collect missing values.",
 ];
+
+const usageText = usageLines.join("\n");
 
 const defaultPromptApi: InstallPromptApi = {
   confirm,
@@ -202,6 +224,7 @@ function parseArgs(args: string[]): ParsedArgs {
   const agents: string[] = [];
   const scopes: string[] = [];
   let force = false;
+  let help = false;
 
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
@@ -219,6 +242,10 @@ function parseArgs(args: string[]): ParsedArgs {
       force = true;
       continue;
     }
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+      continue;
+    }
     if (arg.startsWith("-")) {
       throw new InstallError(`Unknown option: ${arg}`);
     }
@@ -230,6 +257,7 @@ function parseArgs(args: string[]): ParsedArgs {
     agents: uniqueValues(agents),
     scopes: uniqueValues(scopes),
     force,
+    help,
   };
 }
 
@@ -245,7 +273,14 @@ function stdinIsTty(stream: Readable): boolean {
 }
 
 function stdinIsPipe(stream: Readable): boolean {
-  return (stream as { isTTY?: boolean }).isTTY === false;
+  const tty = (stream as { isTTY?: boolean }).isTTY;
+  if (tty === false) {
+    return true;
+  }
+  if (tty === true) {
+    return false;
+  }
+  return (stream as { fd?: unknown }).fd === 0;
 }
 
 function openPromptTty(): PromptTtyStreams | null {
@@ -346,7 +381,7 @@ function asScopes(values: string[]): Scope[] {
 
 function validateRequiredFlags(parsed: ParsedArgs): ResolvedInstallArgs {
   if (parsed.agents.length === 0 || parsed.scopes.length === 0) {
-    throw new InstallError(`Missing required flags.\n${usageLines.join("\n")}`);
+    throw new InstallError(`Missing required flags.\n${usageText}`);
   }
   const agents = uniqueValues(parsed.agents.map((agent) => assertAgent(agent)));
   const scopes = uniqueValues(parsed.scopes.map((scope) => assertScope(scope)));
@@ -505,9 +540,7 @@ async function resolveInstallSources(
     return [await prepareInstallSource({ kind: "tar", stream: stdin })];
   }
 
-  throw new InstallError(
-    `Missing PATH or tar stream on stdin.\n${usageLines.join("\n")}`,
-  );
+  throw new InstallError(`Missing PATH or tar stream on stdin.\n${usageText}`);
 }
 
 function buildInstallPlan(
@@ -784,6 +817,14 @@ export async function runInstallCli(
 
   try {
     const parsed = parseArgs(argv.slice(2));
+    if (parsed.help) {
+      stdout.write(`${usageText}\n`);
+      if (stdinIsPipe(stdin)) {
+        await drainStream(stdin);
+      }
+      return 0;
+    }
+
     const provided = normalizeProvidedInputs(opts);
     if (provided.inputs.length > 0 && parsed.inputPaths.length > 0) {
       throw new InstallError(
