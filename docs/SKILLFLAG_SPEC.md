@@ -53,9 +53,11 @@ Skillflag is designed around these constraints:
 
 ### 3.2 Non-goals
 
-- Defining how a specific agent tool discovers skills on disk.
+- Defining how agent tools internally discover, load, or activate skills at runtime.
 - Defining a central skill registry, marketplace, signing infrastructure, or dependency installation mechanism.
 - Defining how installers resolve conflicts, pin versions, or manage lockfiles (those can exist, but are outside the core Skillflag interface).
+
+Note: Skillflag does define where installers place skill files (see skill-install companion spec). Runtime discovery and activation by the agent tool itself is out of scope.
 
 ## 4. Terminology
 
