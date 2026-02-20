@@ -326,13 +326,13 @@ A producer CLI is **Skillflag-compliant** if:
 
 # `skill-install` companion spec (installer side)
 
-Scope: installs **one** skill bundle into **one** target agent/tool + scope.
+Scope: baseline behavior installs one skill bundle into one target agent/tool + scope. Implementations **MAY** additionally support multi-install in a single invocation (multiple sources, agents, and scopes).
 
 ### Motivation
 
 - **Skills are directories**, not just `SKILL.md`: they can include scripts, templates, references, assets, etc. (multiple tools describe skills this way). ([OpenAI Developers][1])
 - **Producer CLIs should not encode per-agent install logic.** The producer just exposes skill bundles (via Skillflag: `--skill list`, `--skill export <id>`). The installer maps to agent-specific locations.
-- **Users must opt in**: installing a CLI must not automatically install all of its skills into every local agent. So `skill-install` targets exactly one agent and one scope at a time.
+- **Users must opt in**: installing a CLI must not automatically install all of its skills into every local agent. A single explicit target remains the baseline, but implementations **MAY** offer explicit multi-target invocations.
 - **Cross-agent portability exists but paths differ**: several tools already read “portable” directories (notably `.agents/skills` and `~/.config/agents/skills`), while others have native roots like `.claude/skills`, `.codex/skills`, `.github/skills`, etc. ([Block][2])
 
 ## 1) Inputs `skill-install` accepts
@@ -342,6 +342,7 @@ Scope: installs **one** skill bundle into **one** target agent/tool + scope.
 Install from a local skill directory:
 
 - `PATH` **must** be a directory containing `SKILL.md` at its root.
+- Implementations **MAY** accept multiple `PATH` values in one command. If supported, each path is treated as an independent source skill bundle.
 
 Example:
 
@@ -369,7 +370,7 @@ producer --skill export tmux | skill-install --agent claude --scope user
 ### 2.1 Synopsis
 
 ```bash
-skill-install [PATH]
+skill-install [PATH ...]
   --agent <pi|opencode|codex|claude|portable|vscode|copilot|amp|factory|cursor|goose>
   --scope <repo|user|cwd|parent|admin>
   [--root <path>]
@@ -382,6 +383,8 @@ skill-install [PATH]
   [--native]        # only for agents where “portable-first” is the default (goose/amp)
   [--legacy]        # only where a legacy target exists (vscode/copilot -> .claude/skills)
 ```
+
+Implementations **MAY** accept repeated and/or comma-separated `--agent` and `--scope` flags, and apply an install matrix across selected sources and targets.
 
 ### 2.2 Required flags
 
