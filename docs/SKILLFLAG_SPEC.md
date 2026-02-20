@@ -79,15 +79,29 @@ A producer CLI **MAY** additionally implement:
 
 Skillflag does **not** require any particular command substructure (`tool skills ...`) because the goal is a "`--help`-class" universal convention based on flags.
 
-## 6. Discovery: `--skill list`
+## 6. Optional convenience: `--skill install [<id>]`
 
-### 6.1 Behavior
+A Skillflag-compliant producer CLI **MAY** implement `--skill install [<id>]` as a convenience that combines export + install in a single step.
+
+When invoked without required arguments (`agent`, `scope`) and stdin is a TTY, implementations **SHOULD** offer an interactive selection flow.
+
+The interactive behavior, prompts, defaults, and UX are implementation-defined.
+
+When invoked with all required arguments, it **MUST** behave equivalently to:
+
+```bash
+tool --skill export <id> | skill-install --agent <agent> --scope <scope>
+```
+
+## 7. Discovery: `--skill list`
+
+### 7.1 Behavior
 
 - `tool --skill list` **MUST** print the list of available Skill IDs to **stdout**.
 - Output **MUST NOT** include banners, progress text, or other non-data content on stdout.
 - Diagnostics and errors **MUST** go to **stderr**.
 
-### 6.2 Output format (text)
+### 7.2 Output format (text)
 
 - Each skill **MUST** appear on a single line.
 - The line **MUST** begin with the `Skill ID`.
@@ -103,12 +117,12 @@ If summaries are included:
 
 - `<summary>` **MUST NOT** contain newlines or tabs.
 
-### 6.3 Ordering
+### 7.3 Ordering
 
 - Output ordering **SHOULD** be stable and predictable.
 - Recommended: sort lexicographically by Skill ID.
 
-### 6.4 Optional JSON mode
+### 7.4 Optional JSON mode
 
 If `tool --skill list --json` is provided:
 
@@ -142,7 +156,7 @@ Field requirements:
 
 Optional fields MUST be omitted if not provided. Producers MUST NOT emit `null` values. Empty string (`""`) is invalid for `version` and `digest`.
 
-## 7. Viewing: `--skill show <id>` (optional)
+## 8. Viewing: `--skill show <id>` (optional)
 
 If implemented:
 
@@ -151,16 +165,16 @@ If implemented:
 
 This provides a “manpage-like” experience without OS-specific manpage infrastructure.
 
-## 8. Export: `--skill export <id>`
+## 9. Export: `--skill export <id>`
 
-### 8.1 Behavior
+### 9.1 Behavior
 
 - `tool --skill export <id>` **MUST** write the skill bundle to **stdout** as a tar stream.
 - The tar stream **MUST** contain exactly one top-level directory named `<id>/`.
 - The directory **MUST** include `<id>/SKILL.md`.
 - No additional output is permitted on stdout.
 
-### 8.2 Tar format requirements
+### 9.2 Tar format requirements
 
 To maximize portability, exporters:
 
@@ -175,7 +189,7 @@ Exporters **MUST** ensure:
 - No `..` path traversal segments.
 - All entries are relative under `<id>/`.
 
-### 8.3 Determinism
+### 9.3 Determinism
 
 For reproducible installs and caching:
 
@@ -187,13 +201,13 @@ For reproducible installs and caching:
 
 This ensures identical skill content produces identical tar output and matching digests.
 
-### 8.4 Error handling and exit codes
+### 9.4 Error handling and exit codes
 
 - Exit `0` on success.
 - Exit `1` on any error.
 - Write error details to **stderr**.
 
-## 9. Skill directory layout (bundling convention)
+## 10. Skill directory layout (bundling convention)
 
 Inside the producer CLI’s distribution artifact, skills **SHOULD** be stored under a dedicated resource path:
 
@@ -207,7 +221,7 @@ The producer CLI **MUST** map these bundled resources to the Skillflag interface
 
 This deliberately avoids any assumption about package managers or OS-level install roots.
 
-## 10. Skill ID conventions
+## 11. Skill ID conventions
 
 Skill IDs **SHOULD** be:
 
@@ -217,7 +231,7 @@ Skill IDs **SHOULD** be:
 
 Rationale: IDs appear in shell scripts and filesystem paths.
 
-## 11. Metadata (optional, minimal)
+## 12. Metadata (optional, minimal)
 
 Skillflag does not require a manifest file, but implementations **MAY** include metadata as YAML frontmatter at the top of `SKILL.md`.
 
@@ -228,7 +242,7 @@ Critically:
 - **Producer CLIs MUST NOT execute** any bundled scripts as part of export.
 - Installers **SHOULD NOT execute** bundled scripts by default.
 
-## 12. Security considerations
+## 13. Security considerations
 
 Skillflag keeps the producer CLI in a “data export” role. That reduces risk, but does not eliminate it.
 
@@ -241,7 +255,7 @@ Recommendations:
 
 - Bundles may include binaries or scripts; installers should surface that fact clearly.
 
-## 13. Interoperability with a separate installer
+## 14. Interoperability with a separate installer
 
 Skillflag is designed to compose cleanly with a dedicated installer/adaptor CLI that knows how to install into specific agent tools and scopes.
 
@@ -260,33 +274,33 @@ The installer is responsible for:
 
 None of that logic belongs in the producer CLI.
 
-## 14. Examples
+## 15. Examples
 
-### 14.1 List skills
+### 15.1 List skills
 
 ```bash
 tool --skill list
 ```
 
-### 14.2 View the skill documentation (if supported)
+### 15.2 View the skill documentation (if supported)
 
 ```bash
 tool --skill show tmux
 ```
 
-### 14.3 Export and inspect without installing
+### 15.3 Export and inspect without installing
 
 ```bash
 tool --skill export tmux | tar -tf -
 ```
 
-### 14.4 Export and install via an adaptor
+### 15.4 Export and install via an adaptor
 
 ```bash
 tool --skill export tmux | skill-install --agent codex --scope user
 ```
 
-### 14.5 Export and manually place somewhere (no adaptor needed)
+### 15.5 Export and manually place somewhere (no adaptor needed)
 
 ```bash
 mkdir -p .agents/skills/tmux
@@ -295,13 +309,14 @@ tool --skill export tmux | tar -x -C .agents/skills
 
 (That last example assumes the installer semantics are simply “untar into a skills root”.)
 
-## 15. Conformance checklist
+## 16. Conformance checklist
 
 A producer CLI is **Skillflag-compliant** if:
 
 - [ ] `--skill list` outputs Skill IDs on stdout with no extra stdout noise.
 - [ ] `--skill list --json` includes `digest` for each skill.
 - [ ] `--skill export <id>` emits a tar stream on stdout.
+- [ ] (Optional) `--skill install [<id>]` follows the convenience behavior described in section 6.
 - [ ] The tar stream contains exactly one top-level directory `<id>/`.
 - [ ] `<id>/SKILL.md` exists in the exported stream.
 - [ ] Tar entries are deterministic (stable order, normalized metadata).
