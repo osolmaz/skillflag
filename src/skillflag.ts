@@ -1,6 +1,5 @@
 import process from "node:process";
 import type { Readable, Writable } from "node:stream";
-import { isCancel, multiselect } from "@clack/prompts";
 import type { Option } from "@clack/prompts";
 
 import { SkillflagError, toErrorMessage } from "./core/errors.js";
@@ -13,7 +12,6 @@ import {
 } from "./core/paths.js";
 import { showSkill } from "./core/show.js";
 import { collectSkillEntries, createTarStream } from "./core/tar.js";
-import { runInstallCli } from "./install/cli.js";
 import { uniqueValues } from "./utils/collections.js";
 
 export type SkillflagOptions = {
@@ -84,10 +82,13 @@ export const SKILLFLAG_HELP_TEXT = [
   "For full details, read docs/SKILLFLAG_SPEC.md.",
 ].join("\n");
 
-const defaultPromptApi: SkillflagPromptApi = {
-  multiselect,
-  isCancel,
-};
+async function defaultPromptApi(): Promise<SkillflagPromptApi> {
+  const prompts = await import("@clack/prompts");
+  return {
+    multiselect: prompts.multiselect,
+    isCancel: prompts.isCancel,
+  };
+}
 
 function resolveSkillActionArgs(argv: string[]): string[] {
   const cliArgs = argv.length > 2 ? argv.slice(2) : [...argv];
@@ -232,7 +233,7 @@ async function runInstallAction(
   stdout: NodeJS.WritableStream,
   stderr: NodeJS.WritableStream,
 ): Promise<number> {
-  const promptApi = opts.promptApi ?? defaultPromptApi;
+  const promptApi = opts.promptApi ?? (await defaultPromptApi());
   const skillIds = await resolveInstallSkillIds(
     action,
     rootDirs,
@@ -249,6 +250,7 @@ async function runInstallAction(
     }),
   );
 
+  const { runInstallCli } = await import("./install/cli.js");
   return runInstallCli(["node", "skill-install", ...action.installArgs], {
     stdin: stdin as Readable,
     stdout: stdout as Writable,
