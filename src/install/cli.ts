@@ -9,7 +9,6 @@ import {
   multiselect,
   note,
   outro,
-  select,
   spinner,
   text,
 } from "@clack/prompts";
@@ -38,14 +37,14 @@ export type InstallCliOptions = {
 
 type ParsedArgs = {
   inputPaths: string[];
-  agent?: string;
+  agents: string[];
   scopes: string[];
   force: boolean;
 };
 
 type ResolvedInstallArgs = {
   inputPaths: string[];
-  agent: Agent;
+  agents: Agent[];
   scopes: Scope[];
   force: boolean;
 };
@@ -63,12 +62,14 @@ type PreparedInstallSource = {
 
 type InstallPlanItem = {
   source: PreparedInstallSource;
+  agent: Agent;
   scope: Scope;
   destination: string;
 };
 
 type InstallExecutionResult = {
   skillId: string;
+  agent: Agent;
   installedTo: string;
   scope: Scope;
 };
@@ -80,8 +81,8 @@ type WizardResult = {
 
 const usageLines = [
   "Usage:",
-  "  skill-install [PATH ...] --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force]",
-  "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force] < tar",
+  "  skill-install [PATH ...] --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor>[,<agent>...] [--agent <agent>[,<agent>...]] --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force]",
+  "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor>[,<agent>...] [--agent <agent>[,<agent>...]] --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force] < tar",
 ];
 
 const agentOptions: Option<Agent>[] = [
@@ -182,21 +183,31 @@ function parseScopeValues(value: string | undefined): string[] {
   return scopes;
 }
 
+function parseAgentValues(value: string | undefined): string[] {
+  if (!value || value.startsWith("-")) {
+    throw new InstallError("Missing value for --agent.");
+  }
+  const agents = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (agents.length === 0) {
+    throw new InstallError("Missing value for --agent.");
+  }
+  return agents;
+}
+
 function parseArgs(args: string[]): ParsedArgs {
   const rest = [...args];
   const inputPaths: string[] = [];
-  let agent: string | undefined;
+  const agents: string[] = [];
   const scopes: string[] = [];
   let force = false;
 
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === "--agent") {
-      const value = rest[i + 1];
-      if (!value || value.startsWith("-")) {
-        throw new InstallError("Missing value for --agent.");
-      }
-      agent = value;
+      agents.push(...parseAgentValues(rest[i + 1]));
       i += 1;
       continue;
     }
@@ -215,7 +226,12 @@ function parseArgs(args: string[]): ParsedArgs {
     inputPaths.push(arg);
   }
 
-  return { inputPaths, agent, scopes: uniqueValues(scopes), force };
+  return {
+    inputPaths,
+    agents: uniqueValues(agents),
+    scopes: uniqueValues(scopes),
+    force,
+  };
 }
 
 function stdinHasData(stream: Readable): boolean {
@@ -238,6 +254,14 @@ function asAgent(value: string | undefined): Agent | undefined {
   }
 }
 
+function asAgents(values: string[]): Agent[] {
+  return uniqueValues(
+    values
+      .map((value) => asAgent(value))
+      .filter((value): value is Agent => value !== undefined),
+  );
+}
+
 function asScope(value: string | undefined): Scope | undefined {
   if (!value) return undefined;
   try {
@@ -253,14 +277,35 @@ function asScopes(values: string[]): Scope[] {
     .filter((value): value is Scope => value !== undefined);
 }
 
+function getSharedScopes(agents: Agent[]): Scope[] {
+  if (agents.length === 0) return [];
+  return supportedScopesByAgent[agents[0]].filter((scope) =>
+    agents.every((agent) => supportedScopesByAgent[agent].includes(scope)),
+  );
+}
+
+function assertSupportedAgentScopes(agents: Agent[], scopes: Scope[]): void {
+  for (const agent of agents) {
+    const supportedScopes = supportedScopesByAgent[agent];
+    for (const scope of scopes) {
+      if (!supportedScopes.includes(scope)) {
+        throw new InstallError(`Unsupported agent/scope: ${agent} ${scope}`);
+      }
+    }
+  }
+}
+
 function validateRequiredFlags(parsed: ParsedArgs): ResolvedInstallArgs {
-  if (!parsed.agent || parsed.scopes.length === 0) {
+  if (parsed.agents.length === 0 || parsed.scopes.length === 0) {
     throw new InstallError(`Missing required flags.\n${usageLines.join("\n")}`);
   }
+  const agents = uniqueValues(parsed.agents.map((agent) => assertAgent(agent)));
+  const scopes = uniqueValues(parsed.scopes.map((scope) => assertScope(scope)));
+  assertSupportedAgentScopes(agents, scopes);
   return {
     inputPaths: parsed.inputPaths,
-    agent: assertAgent(parsed.agent),
-    scopes: uniqueValues(parsed.scopes.map((scope) => assertScope(scope))),
+    agents,
+    scopes,
     force: parsed.force,
   };
 }
@@ -417,22 +462,42 @@ async function resolveInstallSources(
 
 function buildInstallPlan(
   sources: PreparedInstallSource[],
-  agent: Agent,
+  agents: Agent[],
   scopes: Scope[],
   cwd: string,
 ): InstallPlanItem[] {
   const plan: InstallPlanItem[] = [];
   for (const source of sources) {
-    for (const scope of scopes) {
-      const skillsRoot = resolveSkillsRoot(agent, scope, cwd);
-      plan.push({
-        source,
-        scope,
-        destination: path.join(skillsRoot, source.skillIdHint),
-      });
+    for (const agent of agents) {
+      for (const scope of scopes) {
+        const skillsRoot = resolveSkillsRoot(agent, scope, cwd);
+        plan.push({
+          source,
+          agent,
+          scope,
+          destination: path.join(skillsRoot, source.skillIdHint),
+        });
+      }
     }
   }
   return plan;
+}
+
+function dedupeInstallPlan(plan: InstallPlanItem[]): InstallPlanItem[] {
+  const seenByDestination = new Map<string, Set<PreparedInstallSource>>();
+  const deduped: InstallPlanItem[] = [];
+
+  for (const item of plan) {
+    const seenSources = seenByDestination.get(item.destination) ?? new Set();
+    if (seenSources.has(item.source)) {
+      continue;
+    }
+    seenSources.add(item.source);
+    seenByDestination.set(item.destination, seenSources);
+    deduped.push(item);
+  }
+
+  return deduped;
 }
 
 async function runInstallWizard(
@@ -460,18 +525,34 @@ async function runInstallWizard(
     inputPaths = parsePathList(pathValue.trim() || defaultPath);
   }
 
-  const agentInitial = asAgent(parsed.agent) ?? "codex";
-  const agentValue = await select({
-    message: "Agent target",
-    options: agentOptions,
-    initialValue: agentInitial,
-    input: stdin,
-    output: stdout,
-  });
-  if (isCancel(agentValue)) return cancelWizard(stdin, stdout);
-  const agent = assertAgent(agentValue);
+  const parsedAgents = asAgents(parsed.agents);
+  let agents: Agent[];
+  if (
+    parsedAgents.length > 0 &&
+    parsedAgents.length === uniqueValues(parsed.agents).length
+  ) {
+    agents = parsedAgents;
+  } else if (agentOptions.length === 1) {
+    agents = [assertAgent(agentOptions[0].value)];
+  } else {
+    const agentValues = await multiselect({
+      message: "Agent targets",
+      options: agentOptions,
+      initialValues: parsedAgents.length > 0 ? parsedAgents : ["codex"],
+      required: true,
+      input: stdin,
+      output: stdout,
+    });
+    if (isCancel(agentValues)) return cancelWizard(stdin, stdout);
+    agents = uniqueValues(agentValues.map((value) => assertAgent(value)));
+  }
 
-  const supportedScopes = supportedScopesByAgent[agent];
+  const supportedScopes = getSharedScopes(agents);
+  if (supportedScopes.length === 0) {
+    throw new InstallError(
+      `No shared scopes for selected agents: ${agents.join(", ")}`,
+    );
+  }
   const parsedScopes = asScopes(parsed.scopes).filter((scope) =>
     supportedScopes.includes(scope),
   );
@@ -507,24 +588,29 @@ async function runInstallWizard(
   if (isCancel(forceValue)) return cancelWizard(stdin, stdout);
   const force = forceValue;
 
+  assertSupportedAgentScopes(agents, scopes);
+
   const sources = await resolveInstallSources(inputPaths, stdin, provided);
-  const plan = buildInstallPlan(sources, agent, scopes, cwd);
+  const plan = buildInstallPlan(sources, agents, scopes, cwd);
+  const executionPlan = dedupeInstallPlan(plan);
 
   const sourceLines = sources.map(
     (source) => `${source.skillIdHint} <= ${source.source}`,
   );
   const installLines = plan.map(
     (item) =>
-      `${item.source.skillIdHint} @ ${item.scope} -> ${item.destination}`,
+      `${item.source.skillIdHint} @ ${item.agent}/${item.scope} -> ${item.destination}`,
   );
 
   note(
     [
       `Sources (${sources.length}):`,
       ...sourceLines,
-      `Agent: ${agent}`,
-      `Scopes: ${scopes.join(", ")}`,
-      `Planned installs (${plan.length}):`,
+      `Agents (${agents.length}): ${agents.join(", ")}`,
+      `Scopes (${scopes.length}): ${scopes.join(", ")}`,
+      `Matrix: ${sources.length} skill(s) × ${agents.length} agent(s) × ${scopes.length} scope(s) = ${plan.length} combination(s)`,
+      `Execution targets: ${executionPlan.length}`,
+      `Planned combinations (${plan.length}):`,
       ...installLines,
       `Force: ${force ? "yes" : "no"}`,
     ].join("\n"),
@@ -541,7 +627,7 @@ async function runInstallWizard(
   if (isCancel(confirmed) || !confirmed) return cancelWizard(stdin, stdout);
 
   return {
-    args: { inputPaths, agent, scopes, force },
+    args: { inputPaths, agents, scopes, force },
     sources,
   };
 }
@@ -554,18 +640,19 @@ async function runInstall(
   cwd: string,
   useSpinner: boolean,
 ): Promise<InstallExecutionResult[]> {
-  const plan = buildInstallPlan(sources, args.agent, args.scopes, cwd);
+  const plan = buildInstallPlan(sources, args.agents, args.scopes, cwd);
+  const executionPlan = dedupeInstallPlan(plan);
 
   const execute = async (): Promise<InstallExecutionResult[]> => {
     const results: InstallExecutionResult[] = [];
-    for (const item of plan) {
+    for (const item of executionPlan) {
       const result = await installSkill(item.source.makeInput(), {
-        agent: args.agent,
+        agent: item.agent,
         scope: item.scope,
         cwd,
         force: args.force,
       });
-      results.push({ ...result, scope: item.scope });
+      results.push({ ...result, agent: item.agent, scope: item.scope });
     }
     return results;
   };
@@ -575,7 +662,9 @@ async function runInstall(
   }
 
   const s = spinner({ input: stdin, output: stdout });
-  s.start(`Installing ${plan.length} target${plan.length === 1 ? "" : "s"}...`);
+  s.start(
+    `Installing ${executionPlan.length} target${executionPlan.length === 1 ? "" : "s"}...`,
+  );
   try {
     const result = await execute();
     s.stop("Install complete.");
@@ -609,7 +698,7 @@ export async function runInstallCli(
     let resolvedArgs: ResolvedInstallArgs;
     let sources: PreparedInstallSource[];
 
-    if (!parsed.agent || parsed.scopes.length === 0) {
+    if (parsed.agents.length === 0 || parsed.scopes.length === 0) {
       if (!stdinIsTty(stdin)) {
         resolvedArgs = validateRequiredFlags(parsed);
         sources = await resolveInstallSources(
@@ -651,7 +740,9 @@ export async function runInstallCli(
     );
 
     for (const result of results) {
-      stderr.write(`Installed ${result.skillId} to ${result.installedTo}\n`);
+      stderr.write(
+        `Installed ${result.skillId} to ${result.installedTo} (${result.agent}/${result.scope})\n`,
+      );
     }
     if (wizardUsed) {
       outro("Done.", { input: stdin, output: stdout });

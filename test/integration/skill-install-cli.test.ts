@@ -170,3 +170,113 @@ test("runInstallCli accepts comma-separated scopes", async (t) => {
   );
   await fs.access(path.join(codexHome.dir, "skills/cli-skill-comma/SKILL.md"));
 });
+
+test("runInstallCli supports repeated --agent and installs matrix combinations", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-agents-repo-");
+  const codexHome = await makeTempDir("skill-install-cli-agents-codex-home-");
+  const home = await makeTempDir("skill-install-cli-agents-home-");
+  const skill = await makeTempDir("skill-install-cli-agents-skill-");
+  const previousCodexHome = process.env.CODEX_HOME;
+  const previousHome = process.env.HOME;
+  process.env.CODEX_HOME = codexHome.dir;
+  process.env.HOME = home.dir;
+  t.after(async () => {
+    process.env.CODEX_HOME = previousCodexHome;
+    process.env.HOME = previousHome;
+    await repo.cleanup();
+    await codexHome.cleanup();
+    await home.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-agents\ndescription: CLI multi-agent test skill\n---\n",
+  );
+
+  const stderr = createCapture();
+  const exitCode = await runInstallCli(
+    [
+      "node",
+      "skill-install",
+      skill.dir,
+      "--agent",
+      "codex",
+      "--agent",
+      "claude",
+      "--scope",
+      "repo",
+      "--scope",
+      "user",
+    ],
+    {
+      stdin: Readable.from([]),
+      stderr: stderr.stream,
+      cwd: repo.dir,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  const installLines = stderr
+    .text()
+    .split("\n")
+    .filter((line) => line.startsWith("Installed "));
+  assert.equal(installLines.length, 4);
+
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/cli-skill-agents/SKILL.md"),
+  );
+  await fs.access(
+    path.join(repo.dir, ".claude/skills/cli-skill-agents/SKILL.md"),
+  );
+  await fs.access(path.join(codexHome.dir, "skills/cli-skill-agents/SKILL.md"));
+  await fs.access(
+    path.join(home.dir, ".claude/skills/cli-skill-agents/SKILL.md"),
+  );
+});
+
+test("runInstallCli handles multi-agent installs when agents share a destination", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-shared-dest-repo-");
+  const skill = await makeTempDir("skill-install-cli-shared-dest-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-shared\ndescription: CLI shared destination test skill\n---\n",
+  );
+
+  const stderr = createCapture();
+  const exitCode = await runInstallCli(
+    [
+      "node",
+      "skill-install",
+      skill.dir,
+      "--agent",
+      "portable",
+      "--agent",
+      "amp",
+      "--scope",
+      "repo",
+    ],
+    {
+      stdin: Readable.from([]),
+      stderr: stderr.stream,
+      cwd: repo.dir,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed cli-skill-shared to/);
+  await fs.access(
+    path.join(repo.dir, ".agents/skills/cli-skill-shared/SKILL.md"),
+  );
+});
