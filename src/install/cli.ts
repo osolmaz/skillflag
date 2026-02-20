@@ -6,6 +6,7 @@ import {
   confirm,
   intro,
   isCancel,
+  multiselect,
   note,
   outro,
   select,
@@ -30,27 +31,57 @@ export type InstallCliOptions = {
   stderr?: Writable;
   cwd?: string;
   providedInput?: InstallInput;
+  providedInputs?: InstallInput[];
   providedSkillId?: string;
+  providedSkillIds?: string[];
 };
 
 type ParsedArgs = {
-  inputPath?: string;
+  inputPaths: string[];
   agent?: string;
-  scope?: string;
+  scopes: string[];
   force: boolean;
 };
 
 type ResolvedInstallArgs = {
-  inputPath?: string;
+  inputPaths: string[];
   agent: Agent;
-  scope: Scope;
+  scopes: Scope[];
   force: boolean;
+};
+
+type ProvidedInstallInputs = {
+  inputs: InstallInput[];
+  skillIds: string[];
+};
+
+type PreparedInstallSource = {
+  source: string;
+  skillIdHint: string;
+  makeInput: () => InstallInput;
+};
+
+type InstallPlanItem = {
+  source: PreparedInstallSource;
+  scope: Scope;
+  destination: string;
+};
+
+type InstallExecutionResult = {
+  skillId: string;
+  installedTo: string;
+  scope: Scope;
+};
+
+type WizardResult = {
+  args: ResolvedInstallArgs;
+  sources: PreparedInstallSource[];
 };
 
 const usageLines = [
   "Usage:",
-  "  skill-install [PATH] --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin>",
-  "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin> < tar",
+  "  skill-install [PATH ...] --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force]",
+  "  skill-install --agent <codex|claude|portable|vscode|copilot|amp|goose|opencode|factory|cursor> --scope <repo|user|cwd|parent|admin>[,<scope>...] [--scope <scope>[,<scope>...]] [--force] < tar",
 ];
 
 const agentOptions: Option<Agent>[] = [
@@ -127,24 +158,50 @@ const supportedScopesByAgent: Record<Agent, Scope[]> = {
   cursor: ["repo"],
 };
 
-const allScopes: Scope[] = ["repo", "user", "admin", "cwd", "parent"];
+function uniqueValues<T>(values: T[]): T[] {
+  const out: T[] = [];
+  for (const value of values) {
+    if (!out.includes(value)) {
+      out.push(value);
+    }
+  }
+  return out;
+}
+
+function parseScopeValues(value: string | undefined): string[] {
+  if (!value || value.startsWith("-")) {
+    throw new InstallError("Missing value for --scope.");
+  }
+  const scopes = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (scopes.length === 0) {
+    throw new InstallError("Missing value for --scope.");
+  }
+  return scopes;
+}
 
 function parseArgs(args: string[]): ParsedArgs {
   const rest = [...args];
-  let inputPath: string | undefined;
+  const inputPaths: string[] = [];
   let agent: string | undefined;
-  let scope: string | undefined;
+  const scopes: string[] = [];
   let force = false;
 
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === "--agent") {
-      agent = rest[i + 1];
+      const value = rest[i + 1];
+      if (!value || value.startsWith("-")) {
+        throw new InstallError("Missing value for --agent.");
+      }
+      agent = value;
       i += 1;
       continue;
     }
     if (arg === "--scope") {
-      scope = rest[i + 1];
+      scopes.push(...parseScopeValues(rest[i + 1]));
       i += 1;
       continue;
     }
@@ -155,14 +212,10 @@ function parseArgs(args: string[]): ParsedArgs {
     if (arg.startsWith("-")) {
       throw new InstallError(`Unknown option: ${arg}`);
     }
-    if (!inputPath) {
-      inputPath = arg;
-      continue;
-    }
-    throw new InstallError(`Unexpected argument: ${arg}`);
+    inputPaths.push(arg);
   }
 
-  return { inputPath, agent, scope, force };
+  return { inputPaths, agent, scopes: uniqueValues(scopes), force };
 }
 
 function stdinHasData(stream: Readable): boolean {
@@ -194,42 +247,83 @@ function asScope(value: string | undefined): Scope | undefined {
   }
 }
 
+function asScopes(values: string[]): Scope[] {
+  return values
+    .map((value) => asScope(value))
+    .filter((value): value is Scope => value !== undefined);
+}
+
 function validateRequiredFlags(parsed: ParsedArgs): ResolvedInstallArgs {
-  if (!parsed.agent || !parsed.scope) {
+  if (!parsed.agent || parsed.scopes.length === 0) {
     throw new InstallError(`Missing required flags.\n${usageLines.join("\n")}`);
   }
   return {
-    inputPath: parsed.inputPath,
+    inputPaths: parsed.inputPaths,
     agent: assertAgent(parsed.agent),
-    scope: assertScope(parsed.scope),
+    scopes: uniqueValues(parsed.scopes.map((scope) => assertScope(scope))),
     force: parsed.force,
   };
 }
 
-function resolveInstallInput(
-  inputPath: string | undefined,
-  stdin: Readable,
-  providedInput?: InstallInput,
-): InstallInput {
-  if (inputPath && providedInput) {
-    throw new InstallError("PATH cannot be used when install input is preset.");
+function normalizeProvidedInputs(
+  opts: InstallCliOptions,
+): ProvidedInstallInputs {
+  if (opts.providedInput && opts.providedInputs?.length) {
+    throw new InstallError(
+      "providedInput and providedInputs cannot be used together.",
+    );
   }
-  if (inputPath) {
-    const stat = fs.statSync(inputPath);
-    if (!stat.isDirectory()) {
-      throw new InstallError("PATH must be a directory containing SKILL.md.");
-    }
-    return { kind: "dir", dir: inputPath };
+  if (opts.providedSkillId && opts.providedSkillIds?.length) {
+    throw new InstallError(
+      "providedSkillId and providedSkillIds cannot be used together.",
+    );
   }
-  if (providedInput) {
-    return providedInput;
+
+  const inputs =
+    opts.providedInputs ?? (opts.providedInput ? [opts.providedInput] : []);
+  const skillIds =
+    opts.providedSkillIds ??
+    (opts.providedSkillId ? [opts.providedSkillId] : []);
+
+  if (skillIds.length > 0 && inputs.length === 0) {
+    throw new InstallError("Preset skill ids require preset install inputs.");
   }
-  if (stdinHasData(stdin)) {
-    return { kind: "tar", stream: stdin };
+  if (skillIds.length > 0 && skillIds.length !== inputs.length) {
+    throw new InstallError(
+      "Preset skill id count must match preset install input count.",
+    );
   }
-  throw new InstallError(
-    `Missing PATH or tar stream on stdin.\n${usageLines.join("\n")}`,
+
+  return { inputs, skillIds };
+}
+
+function parsePathList(value: string | undefined): string[] {
+  const raw = value?.trim() ?? "";
+  if (!raw) {
+    return [];
+  }
+  return uniqueValues(
+    raw
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0),
   );
+}
+
+function validatePathPrompt(value: string | undefined): string | undefined {
+  const candidates = parsePathList(value);
+  if (candidates.length === 0) return "PATH is required.";
+  for (const candidate of candidates) {
+    try {
+      const stat = fs.statSync(candidate);
+      if (!stat.isDirectory()) {
+        return `PATH must be a directory: ${candidate}`;
+      }
+    } catch {
+      return `PATH does not exist: ${candidate}`;
+    }
+  }
+  return undefined;
 }
 
 function cancelWizard(
@@ -241,18 +335,104 @@ function cancelWizard(
   return null;
 }
 
-function validatePathPrompt(value: string | undefined): string | undefined {
-  const candidate = value?.trim() ?? "";
-  if (!candidate) return "PATH is required.";
-  try {
-    const stat = fs.statSync(candidate);
-    if (!stat.isDirectory()) {
-      return "PATH must be a directory.";
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on("data", (chunk) => {
+      chunks.push(Buffer.from(chunk));
+    });
+    stream.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+    stream.on("error", reject);
+  });
+}
+
+async function prepareInstallSource(
+  input: InstallInput,
+  skillId?: string,
+): Promise<PreparedInstallSource> {
+  if (input.kind === "dir") {
+    const sourceDir = path.resolve(input.dir);
+    let stat;
+    try {
+      stat = fs.statSync(sourceDir);
+    } catch {
+      throw new InstallError(`PATH does not exist: ${sourceDir}`);
     }
-  } catch {
-    return "PATH does not exist.";
+    if (!stat.isDirectory()) {
+      throw new InstallError("PATH must be a directory containing SKILL.md.");
+    }
+
+    await assertSkillDir(sourceDir);
+    const meta = await readSkillMetadata(sourceDir);
+    return {
+      source: sourceDir,
+      skillIdHint: meta.name,
+      makeInput: () => ({ kind: "dir", dir: sourceDir }),
+    };
   }
-  return undefined;
+
+  const tarBuffer = await streamToBuffer(input.stream);
+  return {
+    source: "tar stream",
+    skillIdHint: skillId ?? "<from skill bundle>",
+    makeInput: () => ({ kind: "tar", stream: Readable.from(tarBuffer) }),
+  };
+}
+
+async function resolveInstallSources(
+  inputPaths: string[],
+  stdin: Readable,
+  provided: ProvidedInstallInputs,
+): Promise<PreparedInstallSource[]> {
+  if (inputPaths.length > 0 && provided.inputs.length > 0) {
+    throw new InstallError("PATH cannot be used when install input is preset.");
+  }
+
+  if (inputPaths.length > 0) {
+    return Promise.all(
+      inputPaths.map((inputPath) =>
+        prepareInstallSource({ kind: "dir", dir: inputPath }),
+      ),
+    );
+  }
+
+  if (provided.inputs.length > 0) {
+    return Promise.all(
+      provided.inputs.map((input, index) =>
+        prepareInstallSource(input, provided.skillIds[index]),
+      ),
+    );
+  }
+
+  if (stdinHasData(stdin)) {
+    return [await prepareInstallSource({ kind: "tar", stream: stdin })];
+  }
+
+  throw new InstallError(
+    `Missing PATH or tar stream on stdin.\n${usageLines.join("\n")}`,
+  );
+}
+
+function buildInstallPlan(
+  sources: PreparedInstallSource[],
+  agent: Agent,
+  scopes: Scope[],
+  cwd: string,
+): InstallPlanItem[] {
+  const plan: InstallPlanItem[] = [];
+  for (const source of sources) {
+    for (const scope of scopes) {
+      const skillsRoot = resolveSkillsRoot(agent, scope, cwd);
+      plan.push({
+        source,
+        scope,
+        destination: path.join(skillsRoot, source.skillIdHint),
+      });
+    }
+  }
+  return plan;
 }
 
 async function runInstallWizard(
@@ -260,16 +440,16 @@ async function runInstallWizard(
   stdin: Readable,
   stdout: Writable,
   cwd: string,
-  providedInput?: InstallInput,
-  providedSkillId?: string,
-): Promise<ResolvedInstallArgs | null> {
+  provided: ProvidedInstallInputs,
+): Promise<WizardResult | null> {
   intro("skill-install wizard", { input: stdin, output: stdout });
 
-  let inputPath = parsed.inputPath;
-  if (!providedInput) {
-    const defaultPath = parsed.inputPath ?? cwd;
+  let inputPaths = parsed.inputPaths;
+  if (provided.inputs.length === 0 && inputPaths.length === 0) {
+    const defaultPath = cwd;
     const pathValue = await text({
-      message: "PATH to a skill directory (defaults to current directory)",
+      message:
+        "PATH to skill directory (comma-separated for multiple, defaults to current directory)",
       placeholder: defaultPath,
       defaultValue: defaultPath,
       validate: validatePathPrompt,
@@ -277,7 +457,7 @@ async function runInstallWizard(
       output: stdout,
     });
     if (isCancel(pathValue)) return cancelWizard(stdin, stdout);
-    inputPath = pathValue.trim() || defaultPath;
+    inputPaths = parsePathList(pathValue.trim() || defaultPath);
   }
 
   const agentInitial = asAgent(parsed.agent) ?? "codex";
@@ -292,32 +472,31 @@ async function runInstallWizard(
   const agent = assertAgent(agentValue);
 
   const supportedScopes = supportedScopesByAgent[agent];
-  const scopeInitial = (() => {
-    const initialScope = asScope(parsed.scope);
-    if (initialScope && supportedScopes.includes(initialScope)) {
-      return initialScope;
-    }
-    return supportedScopes[0];
-  })();
-  const scopeOptions: Option<Scope>[] = allScopes.map((scope) => ({
-    value: scope,
-    label: scope,
-    hint:
-      scopeDescriptions[scope] +
-      (supportedScopes.includes(scope)
-        ? ""
-        : " (not supported for this agent)"),
-    disabled: !supportedScopes.includes(scope),
-  }));
-  const scopeValue = await select({
-    message: "Scope target",
-    options: scopeOptions,
-    initialValue: scopeInitial,
-    input: stdin,
-    output: stdout,
-  });
-  if (isCancel(scopeValue)) return cancelWizard(stdin, stdout);
-  const scope = assertScope(scopeValue);
+  const parsedScopes = asScopes(parsed.scopes).filter((scope) =>
+    supportedScopes.includes(scope),
+  );
+
+  let scopes: Scope[];
+  if (supportedScopes.length === 1) {
+    scopes = [supportedScopes[0]];
+  } else {
+    const scopeOptions: Option<Scope>[] = supportedScopes.map((scope) => ({
+      value: scope,
+      label: scope,
+      hint: scopeDescriptions[scope],
+    }));
+    const scopeValues = await multiselect({
+      message: "Scope targets",
+      options: scopeOptions,
+      initialValues:
+        parsedScopes.length > 0 ? parsedScopes : [supportedScopes[0]],
+      required: true,
+      input: stdin,
+      output: stdout,
+    });
+    if (isCancel(scopeValues)) return cancelWizard(stdin, stdout);
+    scopes = uniqueValues(scopeValues.map((scope) => assertScope(scope)));
+  }
 
   const forceValue = await confirm({
     message: "Force overwrite if the destination already exists? (--force)",
@@ -328,34 +507,25 @@ async function runInstallWizard(
   if (isCancel(forceValue)) return cancelWizard(stdin, stdout);
   const force = forceValue;
 
-  const skillsRoot = resolveSkillsRoot(agent, scope, cwd);
-  let source = "";
-  let skillId = providedSkillId;
+  const sources = await resolveInstallSources(inputPaths, stdin, provided);
+  const plan = buildInstallPlan(sources, agent, scopes, cwd);
 
-  if (providedInput?.kind === "tar") {
-    source = "tar stream";
-    if (!skillId) {
-      skillId = "<from skill bundle>";
-    }
-  } else {
-    const sourceDir = path.resolve(
-      providedInput?.kind === "dir" ? providedInput.dir : (inputPath ?? cwd),
-    );
-    await assertSkillDir(sourceDir);
-    const meta = await readSkillMetadata(sourceDir);
-    source = sourceDir;
-    skillId = meta.name;
-  }
-
-  const destDir = path.join(skillsRoot, skillId);
+  const sourceLines = sources.map(
+    (source) => `${source.skillIdHint} <= ${source.source}`,
+  );
+  const installLines = plan.map(
+    (item) =>
+      `${item.source.skillIdHint} @ ${item.scope} -> ${item.destination}`,
+  );
 
   note(
     [
-      `Source: ${source}`,
-      `Skill: ${skillId}`,
+      `Sources (${sources.length}):`,
+      ...sourceLines,
       `Agent: ${agent}`,
-      `Scope: ${scope}`,
-      `Destination: ${destDir}`,
+      `Scopes: ${scopes.join(", ")}`,
+      `Planned installs (${plan.length}):`,
+      ...installLines,
       `Force: ${force ? "yes" : "no"}`,
     ].join("\n"),
     "Install summary",
@@ -370,36 +540,44 @@ async function runInstallWizard(
   });
   if (isCancel(confirmed) || !confirmed) return cancelWizard(stdin, stdout);
 
-  return { inputPath, agent, scope, force };
+  return {
+    args: { inputPaths, agent, scopes, force },
+    sources,
+  };
 }
 
 async function runInstall(
   args: ResolvedInstallArgs,
+  sources: PreparedInstallSource[],
   stdin: Readable,
   stdout: Writable,
   cwd: string,
   useSpinner: boolean,
-  providedInput?: InstallInput,
-): Promise<{ skillId: string; installedTo: string }> {
-  const input = resolveInstallInput(args.inputPath, stdin, providedInput);
+): Promise<InstallExecutionResult[]> {
+  const plan = buildInstallPlan(sources, args.agent, args.scopes, cwd);
+
+  const execute = async (): Promise<InstallExecutionResult[]> => {
+    const results: InstallExecutionResult[] = [];
+    for (const item of plan) {
+      const result = await installSkill(item.source.makeInput(), {
+        agent: args.agent,
+        scope: item.scope,
+        cwd,
+        force: args.force,
+      });
+      results.push({ ...result, scope: item.scope });
+    }
+    return results;
+  };
+
   if (!useSpinner) {
-    return installSkill(input, {
-      agent: args.agent,
-      scope: args.scope,
-      cwd,
-      force: args.force,
-    });
+    return execute();
   }
 
   const s = spinner({ input: stdin, output: stdout });
-  s.start("Installing skill...");
+  s.start(`Installing ${plan.length} target${plan.length === 1 ? "" : "s"}...`);
   try {
-    const result = await installSkill(input, {
-      agent: args.agent,
-      scope: args.scope,
-      cwd,
-      force: args.force,
-    });
+    const result = await execute();
     s.stop("Install complete.");
     return result;
   } catch (err) {
@@ -419,48 +597,62 @@ export async function runInstallCli(
 
   try {
     const parsed = parseArgs(argv.slice(2));
-    if (opts.providedInput && parsed.inputPath) {
+    const provided = normalizeProvidedInputs(opts);
+    if (provided.inputs.length > 0 && parsed.inputPaths.length > 0) {
       throw new InstallError(
         "PATH cannot be used when install input is preset.",
       );
     }
+
     let wizardUsed = false;
 
-    const installArgs =
-      !parsed.agent || !parsed.scope
-        ? (() => {
-            if (!stdinIsTty(stdin)) {
-              return validateRequiredFlags(parsed);
-            }
-            wizardUsed = true;
-            return null;
-          })()
-        : validateRequiredFlags(parsed);
+    let resolvedArgs: ResolvedInstallArgs;
+    let sources: PreparedInstallSource[];
 
-    const resolved =
-      installArgs ??
-      (await runInstallWizard(
-        parsed,
+    if (!parsed.agent || parsed.scopes.length === 0) {
+      if (!stdinIsTty(stdin)) {
+        resolvedArgs = validateRequiredFlags(parsed);
+        sources = await resolveInstallSources(
+          resolvedArgs.inputPaths,
+          stdin,
+          provided,
+        );
+      } else {
+        wizardUsed = true;
+        const wizardResult = await runInstallWizard(
+          parsed,
+          stdin,
+          stdout,
+          cwd,
+          provided,
+        );
+        if (!wizardResult) {
+          return 1;
+        }
+        resolvedArgs = wizardResult.args;
+        sources = wizardResult.sources;
+      }
+    } else {
+      resolvedArgs = validateRequiredFlags(parsed);
+      sources = await resolveInstallSources(
+        resolvedArgs.inputPaths,
         stdin,
-        stdout,
-        cwd,
-        opts.providedInput,
-        opts.providedSkillId,
-      ));
-    if (!resolved) {
-      return 1;
+        provided,
+      );
     }
 
-    const result = await runInstall(
-      resolved,
+    const results = await runInstall(
+      resolvedArgs,
+      sources,
       stdin,
       stdout,
       cwd,
       wizardUsed,
-      opts.providedInput,
     );
 
-    stderr.write(`Installed ${result.skillId} to ${result.installedTo}\n`);
+    for (const result of results) {
+      stderr.write(`Installed ${result.skillId} to ${result.installedTo}\n`);
+    }
     if (wizardUsed) {
       outro("Done.", { input: stdin, output: stdout });
     }

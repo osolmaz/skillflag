@@ -361,6 +361,85 @@ test("--skill install delegates to installer with exported tar input", async (t)
   assert.match(installedContent, /name: alpha/);
 });
 
+test("--skill install supports multiple ids and multiple scopes", async (t) => {
+  const repo = await makeTempDir("skillflag-install-multi-repo-");
+  const codexHome = await makeTempDir("skillflag-install-multi-codex-home-");
+  const previousCodexHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = codexHome.dir;
+  t.after(async () => {
+    process.env.CODEX_HOME = previousCodexHome;
+    await repo.cleanup();
+    await codexHome.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "beta",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+      "--scope",
+      "user",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed alpha to/);
+  assert.match(stderr.text(), /Installed beta to/);
+
+  await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
+  await fs.access(path.join(repo.dir, ".codex/skills/beta/SKILL.md"));
+  await fs.access(path.join(codexHome.dir, "skills/alpha/SKILL.md"));
+  await fs.access(path.join(codexHome.dir, "skills/beta/SKILL.md"));
+});
+
+test("--skill install without id in non-interactive mode requires explicit ids when multiple skills exist", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /pass one or more ids with --skill install/);
+});
+
 test("--skill install without id picks the only available skill", async (t) => {
   const repo = await makeTempDir("skillflag-install-only-repo-");
   const skillsRoot = await makeTempDir("skillflag-install-only-skills-");
