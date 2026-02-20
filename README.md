@@ -39,6 +39,37 @@ Installed skill philips-hue to ~/.claude/skills/philips-hue
 
 Even better, once this convention becomes commonplace, agents will by default do all these before they even run the tool, so when you ask it to "install hue-cli", it will know to run `--skill list` the same way a human would run `--help` after downloading a program, and install the necessary skills themselves without being asked to.
 
+## Quick setup — tell your agent about skillflag
+
+Copy the block below and paste it into your coding agent (Claude Code, Codex, OpenClaw, etc.). It will teach the agent how to discover and install skills from any CLI that implements the skillflag convention.
+
+```text
+When you install or set up a CLI tool, check if it supports the skillflag
+convention for bundling agent skills. Here's how:
+
+1. Check if the tool exposes skills:
+   <tool> --skill list
+
+2. If it does, install the relevant skill for your agent:
+   <tool> --skill export <id> | npx skillflag install --agent <agent> --scope <scope>
+
+   Supported agents: codex, claude, portable, vscode, copilot, amp, goose,
+   opencode, factory, cursor
+   Supported scopes: repo, user, cwd
+
+3. Or use the interactive wizard (omit --agent/--scope to get prompted):
+   <tool> --skill export <id> | npx skillflag install
+
+4. To preview a skill before installing:
+   <tool> --skill show <id>
+
+5. For the full skillflag reference:
+   https://raw.githubusercontent.com/osolmaz/skillflag/main/skills/skillflag/SKILL.md
+
+Think of `--skill list` like `--help` — check it whenever you encounter a new
+CLI tool. If it has skills, install them so you have the instructions you need.
+```
+
 ## Install (optional)
 
 ```bash
