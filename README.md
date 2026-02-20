@@ -56,13 +56,34 @@ Any CLI that implements the skillflag convention can be used like this:
 ```bash
 # list skills the tool can export
 <tool> --skill list
-# show a single skill’s metadata
+# show a single skill's metadata
 <tool> --skill show <id>
 # install into Codex user skills
 <tool> --skill export <id> | npx skillflag install --agent codex
 # install into Claude project skills
 <tool> --skill export <id> | npx skillflag install --agent claude --scope repo
 ```
+
+### Interactive mode
+
+When `--agent` or `--scope` is omitted and a TTY is available, `skill-install` launches an interactive wizard:
+
+```bash
+# pipe a skill and let the wizard guide you
+<tool> --skill export <id> | npx skillflag install
+```
+
+The wizard lets you pick agents and scopes with arrow keys and space to select, then confirms before installing. This works even when stdin is piped.
+
+### Multi-target install
+
+You can install to multiple agents and scopes in one command:
+
+```bash
+<tool> --skill export <id> | npx skillflag install --agent codex --agent claude --scope repo --scope user
+```
+
+This installs to all combinations of the specified agents × scopes.
 
 ## Add skillflag to your CLI
 
@@ -83,6 +104,24 @@ await maybeHandleSkillflag(process.argv, {
 ```
 
 See the full guide in [docs/INTEGRATION.md](docs/INTEGRATION.md).
+
+## Supported agents
+
+codex, claude, portable, vscode, copilot, amp, goose, opencode, factory, cursor
+
+## Supported scopes
+
+| Scope  | Description                                                   |
+| ------ | ------------------------------------------------------------- |
+| `repo` | Install into the current repository (e.g. `.codex/skills/`)   |
+| `user` | Install into the user's home config (e.g. `~/.codex/skills/`) |
+| `cwd`  | Install relative to the current working directory             |
+
+## Help
+
+```bash
+skill-install --help
+```
 
 ## Bundled skill
 
