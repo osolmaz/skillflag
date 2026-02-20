@@ -18,26 +18,36 @@ export async function assertSkillDir(rootDir: string): Promise<void> {
 }
 
 function parseFrontmatter(content: string): Record<string, string> {
-  if (!content.startsWith("---\n")) {
-    throw new InstallError("Missing YAML frontmatter in SKILL.md.");
+  const frontmatterMatch = content.match(
+    /^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/,
+  );
+  if (!frontmatterMatch) {
+    return {};
   }
-  const endIdx = content.indexOf("\n---", 4);
-  if (endIdx === -1) {
-    throw new InstallError("Unterminated YAML frontmatter in SKILL.md.");
-  }
-  const block = content.slice(4, endIdx + 1);
-  const lines = block.split("\n").filter((line) => line.trim().length > 0);
+  const block = frontmatterMatch[1];
+  const lines = block.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const fields: Record<string, string> = {};
   for (const line of lines) {
     const idx = line.indexOf(":");
     if (idx === -1) continue;
     const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
+    const rawValue = line.slice(idx + 1).trim();
+    const value = stripYamlQuotes(rawValue);
     if (key && value) {
       fields[key] = value;
     }
   }
   return fields;
+}
+
+function stripYamlQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1).trim();
+  }
+  return value;
 }
 
 export async function readSkillMetadata(
@@ -50,10 +60,10 @@ export async function readSkillMetadata(
   const description = fields.description;
 
   if (!name) {
-    throw new InstallError("SKILL.md frontmatter is missing name.");
+    throw new InstallError("SKILL.md metadata is missing name.");
   }
   if (!description) {
-    throw new InstallError("SKILL.md frontmatter is missing description.");
+    throw new InstallError("SKILL.md metadata is missing description.");
   }
 
   return { name, description };
