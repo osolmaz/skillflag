@@ -15,7 +15,12 @@ import {
 import type { Option } from "@clack/prompts";
 
 import { InstallError, toErrorMessage } from "./errors.js";
-import { assertAgent, assertScope, installSkill } from "./install.js";
+import {
+  assertAgent,
+  assertScope,
+  installSkill,
+  type InstallInput,
+} from "./install.js";
 import { resolveSkillsRoot, type Agent, type Scope } from "./resolve.js";
 import { assertSkillDir, readSkillMetadata } from "./validate.js";
 
@@ -24,6 +29,8 @@ export type InstallCliOptions = {
   stdout?: Writable;
   stderr?: Writable;
   cwd?: string;
+  providedInput?: InstallInput;
+  providedSkillId?: string;
 };
 
 type ParsedArgs = {
@@ -202,13 +209,20 @@ function validateRequiredFlags(parsed: ParsedArgs): ResolvedInstallArgs {
 function resolveInstallInput(
   inputPath: string | undefined,
   stdin: Readable,
-): { kind: "dir"; dir: string } | { kind: "tar"; stream: Readable } {
+  providedInput?: InstallInput,
+): InstallInput {
+  if (inputPath && providedInput) {
+    throw new InstallError("PATH cannot be used when install input is preset.");
+  }
   if (inputPath) {
     const stat = fs.statSync(inputPath);
     if (!stat.isDirectory()) {
       throw new InstallError("PATH must be a directory containing SKILL.md.");
     }
     return { kind: "dir", dir: inputPath };
+  }
+  if (providedInput) {
+    return providedInput;
   }
   if (stdinHasData(stdin)) {
     return { kind: "tar", stream: stdin };
@@ -246,20 +260,25 @@ async function runInstallWizard(
   stdin: Readable,
   stdout: Writable,
   cwd: string,
+  providedInput?: InstallInput,
+  providedSkillId?: string,
 ): Promise<ResolvedInstallArgs | null> {
   intro("skill-install wizard", { input: stdin, output: stdout });
 
-  const defaultPath = parsed.inputPath ?? cwd;
-  const pathValue = await text({
-    message: "PATH to a skill directory (defaults to current directory)",
-    placeholder: defaultPath,
-    defaultValue: defaultPath,
-    validate: validatePathPrompt,
-    input: stdin,
-    output: stdout,
-  });
-  if (isCancel(pathValue)) return cancelWizard(stdin, stdout);
-  const inputPath = pathValue.trim() || defaultPath;
+  let inputPath = parsed.inputPath;
+  if (!providedInput) {
+    const defaultPath = parsed.inputPath ?? cwd;
+    const pathValue = await text({
+      message: "PATH to a skill directory (defaults to current directory)",
+      placeholder: defaultPath,
+      defaultValue: defaultPath,
+      validate: validatePathPrompt,
+      input: stdin,
+      output: stdout,
+    });
+    if (isCancel(pathValue)) return cancelWizard(stdin, stdout);
+    inputPath = pathValue.trim() || defaultPath;
+  }
 
   const agentInitial = asAgent(parsed.agent) ?? "codex";
   const agentValue = await select({
@@ -309,16 +328,31 @@ async function runInstallWizard(
   if (isCancel(forceValue)) return cancelWizard(stdin, stdout);
   const force = forceValue;
 
-  const sourceDir = path.resolve(inputPath);
-  await assertSkillDir(sourceDir);
-  const meta = await readSkillMetadata(sourceDir);
   const skillsRoot = resolveSkillsRoot(agent, scope, cwd);
-  const destDir = path.join(skillsRoot, meta.name);
+  let source = "";
+  let skillId = providedSkillId;
+
+  if (providedInput?.kind === "tar") {
+    source = "tar stream";
+    if (!skillId) {
+      skillId = "<from skill bundle>";
+    }
+  } else {
+    const sourceDir = path.resolve(
+      providedInput?.kind === "dir" ? providedInput.dir : (inputPath ?? cwd),
+    );
+    await assertSkillDir(sourceDir);
+    const meta = await readSkillMetadata(sourceDir);
+    source = sourceDir;
+    skillId = meta.name;
+  }
+
+  const destDir = path.join(skillsRoot, skillId);
 
   note(
     [
-      `Source: ${sourceDir}`,
-      `Skill: ${meta.name}`,
+      `Source: ${source}`,
+      `Skill: ${skillId}`,
       `Agent: ${agent}`,
       `Scope: ${scope}`,
       `Destination: ${destDir}`,
@@ -345,8 +379,9 @@ async function runInstall(
   stdout: Writable,
   cwd: string,
   useSpinner: boolean,
+  providedInput?: InstallInput,
 ): Promise<{ skillId: string; installedTo: string }> {
-  const input = resolveInstallInput(args.inputPath, stdin);
+  const input = resolveInstallInput(args.inputPath, stdin, providedInput);
   if (!useSpinner) {
     return installSkill(input, {
       agent: args.agent,
@@ -384,6 +419,11 @@ export async function runInstallCli(
 
   try {
     const parsed = parseArgs(argv.slice(2));
+    if (opts.providedInput && parsed.inputPath) {
+      throw new InstallError(
+        "PATH cannot be used when install input is preset.",
+      );
+    }
     let wizardUsed = false;
 
     const installArgs =
@@ -398,12 +438,27 @@ export async function runInstallCli(
         : validateRequiredFlags(parsed);
 
     const resolved =
-      installArgs ?? (await runInstallWizard(parsed, stdin, stdout, cwd));
+      installArgs ??
+      (await runInstallWizard(
+        parsed,
+        stdin,
+        stdout,
+        cwd,
+        opts.providedInput,
+        opts.providedSkillId,
+      ));
     if (!resolved) {
       return 1;
     }
 
-    const result = await runInstall(resolved, stdin, stdout, cwd, wizardUsed);
+    const result = await runInstall(
+      resolved,
+      stdin,
+      stdout,
+      cwd,
+      wizardUsed,
+      opts.providedInput,
+    );
 
     stderr.write(`Installed ${result.skillId} to ${result.installedTo}\n`);
     if (wizardUsed) {
