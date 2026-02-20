@@ -412,6 +412,66 @@ test("--skill install supports multiple ids and multiple scopes", async (t) => {
   await fs.access(path.join(codexHome.dir, "skills/beta/SKILL.md"));
 });
 
+test("--skill install supports multiple agents and multiple scopes", async (t) => {
+  const repo = await makeTempDir("skillflag-install-agents-repo-");
+  const codexHome = await makeTempDir("skillflag-install-agents-codex-home-");
+  const home = await makeTempDir("skillflag-install-agents-home-");
+  const previousCodexHome = process.env.CODEX_HOME;
+  const previousHome = process.env.HOME;
+  process.env.CODEX_HOME = codexHome.dir;
+  process.env.HOME = home.dir;
+  t.after(async () => {
+    process.env.CODEX_HOME = previousCodexHome;
+    process.env.HOME = previousHome;
+    await repo.cleanup();
+    await codexHome.cleanup();
+    await home.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "--agent",
+      "codex",
+      "--agent",
+      "claude",
+      "--scope",
+      "repo",
+      "--scope",
+      "user",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  const installLines = stderr
+    .text()
+    .split("\n")
+    .filter((line) => line.startsWith("Installed "));
+  assert.equal(installLines.length, 4);
+
+  await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
+  await fs.access(path.join(repo.dir, ".claude/skills/alpha/SKILL.md"));
+  await fs.access(path.join(codexHome.dir, "skills/alpha/SKILL.md"));
+  await fs.access(path.join(home.dir, ".claude/skills/alpha/SKILL.md"));
+});
+
 test("--skill install without id in non-interactive mode requires explicit ids when multiple skills exist", async () => {
   const stdout = createCapture();
   const stderr = createCapture();
