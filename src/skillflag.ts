@@ -48,7 +48,7 @@ export type SkillflagPromptApi = {
 
 const usageLines = [
   "Usage:",
-  "  --skill install [<id> ...] [--agent <agent>[,<agent>...]] [--agent <agent>[,<agent>...]] [--scope <scope>[,<scope>...]] [--scope <scope>[,<scope>...]] [--force]",
+  "  --skill install [<id> ...] [--agent <agent>] [--scope <scope>] [--force]",
   "  --skill list [--json]",
   "  --skill export <id>",
   "  --skill show <id>",
@@ -75,9 +75,9 @@ export const SKILLFLAG_HELP_TEXT = [
   "Export a skill bundle:",
   "  tool --skill export <id>",
   "",
-  "Install a skill bundle into one or more agents:",
-  "  tool --skill install [<id> ...]",
-  "  tool --skill export <id> | skill-install --agent <agent> [--agent <agent>] --scope <scope> [--scope <scope>]",
+  "Install a skill bundle:",
+  "  tool --skill install [<id> ...] [--agent <agent>] [--scope <scope>]",
+  "  tool --skill export <id> | skill-install --agent <agent> --scope <scope>",
   "",
   "For full details, read docs/SKILLFLAG_SPEC.md.",
 ].join("\n");

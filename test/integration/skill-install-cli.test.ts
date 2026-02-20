@@ -401,17 +401,12 @@ test("runInstallCli keeps non-interactive install behavior with flags", async (t
   assert.match(installedContent, /name: cli-skill/);
 });
 
-test("runInstallCli installs multiple skills across repeated scopes", async (t) => {
+test("runInstallCli installs multiple skills with a single agent/scope target", async (t) => {
   const repo = await makeTempDir("skill-install-cli-multi-repo-");
-  const codexHome = await makeTempDir("skill-install-cli-multi-codex-home-");
   const skillOne = await makeTempDir("skill-install-cli-skill-one-");
   const skillTwo = await makeTempDir("skill-install-cli-skill-two-");
-  const previousCodexHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = codexHome.dir;
   t.after(async () => {
-    process.env.CODEX_HOME = previousCodexHome;
     await repo.cleanup();
-    await codexHome.cleanup();
     await skillOne.cleanup();
     await skillTwo.cleanup();
   });
@@ -440,8 +435,6 @@ test("runInstallCli installs multiple skills across repeated scopes", async (t) 
       "codex",
       "--scope",
       "repo",
-      "--scope",
-      "user",
     ],
     {
       stdin: Readable.from([]),
@@ -456,20 +449,56 @@ test("runInstallCli installs multiple skills across repeated scopes", async (t) 
 
   await fs.access(path.join(repo.dir, ".codex/skills/cli-skill-one/SKILL.md"));
   await fs.access(path.join(repo.dir, ".codex/skills/cli-skill-two/SKILL.md"));
-  await fs.access(path.join(codexHome.dir, "skills/cli-skill-one/SKILL.md"));
-  await fs.access(path.join(codexHome.dir, "skills/cli-skill-two/SKILL.md"));
 });
 
-test("runInstallCli accepts comma-separated scopes", async (t) => {
-  const repo = await makeTempDir("skill-install-cli-comma-repo-");
-  const codexHome = await makeTempDir("skill-install-cli-comma-codex-home-");
-  const skill = await makeTempDir("skill-install-cli-comma-skill-");
-  const previousCodexHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = codexHome.dir;
+test("runInstallCli rejects repeated --scope flags", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-repeat-scope-repo-");
+  const skill = await makeTempDir("skill-install-cli-repeat-scope-skill-");
   t.after(async () => {
-    process.env.CODEX_HOME = previousCodexHome;
     await repo.cleanup();
-    await codexHome.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-comma\ndescription: CLI comma scope skill\n---\n",
+  );
+
+  const stderr = createCapture();
+  const exitCode = await runInstallCli(
+    [
+      "node",
+      "skill-install",
+      skill.dir,
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+      "--scope",
+      "user",
+    ],
+    {
+      stdin: Readable.from([]),
+      stderr: stderr.stream,
+      cwd: repo.dir,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one --scope flag is allowed/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/cli-skill-comma/SKILL.md")),
+  );
+});
+
+test("runInstallCli rejects comma-separated --scope values", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-comma-repo-");
+  const skill = await makeTempDir("skill-install-cli-comma-skill-");
+  t.after(async () => {
+    await repo.cleanup();
     await skill.cleanup();
   });
 
@@ -499,30 +528,61 @@ test("runInstallCli accepts comma-separated scopes", async (t) => {
     },
   );
 
-  assert.equal(exitCode, 0);
-  assert.match(stderr.text(), /Installed cli-skill-comma to/);
-
-  await fs.access(
-    path.join(repo.dir, ".codex/skills/cli-skill-comma/SKILL.md"),
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one value is allowed for --scope/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/cli-skill-comma/SKILL.md")),
   );
-  await fs.access(path.join(codexHome.dir, "skills/cli-skill-comma/SKILL.md"));
 });
 
-test("runInstallCli supports repeated --agent and installs matrix combinations", async (t) => {
-  const repo = await makeTempDir("skill-install-cli-agents-repo-");
-  const codexHome = await makeTempDir("skill-install-cli-agents-codex-home-");
-  const home = await makeTempDir("skill-install-cli-agents-home-");
-  const skill = await makeTempDir("skill-install-cli-agents-skill-");
-  const previousCodexHome = process.env.CODEX_HOME;
-  const previousHome = process.env.HOME;
-  process.env.CODEX_HOME = codexHome.dir;
-  process.env.HOME = home.dir;
+test("runInstallCli rejects comma-separated --agent values", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-comma-agent-repo-");
+  const skill = await makeTempDir("skill-install-cli-comma-agent-skill-");
   t.after(async () => {
-    process.env.CODEX_HOME = previousCodexHome;
-    process.env.HOME = previousHome;
     await repo.cleanup();
-    await codexHome.cleanup();
-    await home.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-comma-agent\ndescription: CLI comma agent skill\n---\n",
+  );
+
+  const stderr = createCapture();
+  const exitCode = await runInstallCli(
+    [
+      "node",
+      "skill-install",
+      skill.dir,
+      "--agent",
+      "codex,claude",
+      "--scope",
+      "repo",
+    ],
+    {
+      stdin: Readable.from([]),
+      stderr: stderr.stream,
+      cwd: repo.dir,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one value is allowed for --agent/);
+  await assert.rejects(
+    fs.access(
+      path.join(repo.dir, ".codex/skills/cli-skill-comma-agent/SKILL.md"),
+    ),
+  );
+});
+
+test("runInstallCli rejects repeated --agent flags", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-agents-repo-");
+  const skill = await makeTempDir("skill-install-cli-agents-skill-");
+  t.after(async () => {
+    await repo.cleanup();
     await skill.cleanup();
   });
 
@@ -546,8 +606,6 @@ test("runInstallCli supports repeated --agent and installs matrix combinations",
       "claude",
       "--scope",
       "repo",
-      "--scope",
-      "user",
     ],
     {
       stdin: Readable.from([]),
@@ -556,22 +614,10 @@ test("runInstallCli supports repeated --agent and installs matrix combinations",
     },
   );
 
-  assert.equal(exitCode, 0);
-  const installLines = stderr
-    .text()
-    .split("\n")
-    .filter((line) => line.startsWith("Installed "));
-  assert.equal(installLines.length, 4);
-
-  await fs.access(
-    path.join(repo.dir, ".codex/skills/cli-skill-agents/SKILL.md"),
-  );
-  await fs.access(
-    path.join(repo.dir, ".claude/skills/cli-skill-agents/SKILL.md"),
-  );
-  await fs.access(path.join(codexHome.dir, "skills/cli-skill-agents/SKILL.md"));
-  await fs.access(
-    path.join(home.dir, ".claude/skills/cli-skill-agents/SKILL.md"),
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one --agent flag is allowed/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/cli-skill-agents/SKILL.md")),
   );
 });
 
@@ -592,24 +638,16 @@ test("runInstallCli fails preflight when selected agents/scopes collide on desti
   );
 
   const stderr = createCapture();
-  const exitCode = await runInstallCli(
-    [
-      "node",
-      "skill-install",
-      skill.dir,
-      "--agent",
-      "portable",
-      "--agent",
-      "amp",
-      "--scope",
-      "repo",
-    ],
-    {
-      stdin: Readable.from([]),
-      stderr: stderr.stream,
-      cwd: repo.dir,
-    },
-  );
+  const prompt = createPromptStub({
+    multiselectResponses: [["portable", "amp"], ["repo"]],
+    confirmResponses: [false],
+  });
+  const exitCode = await runInstallCli(["node", "skill-install", skill.dir], {
+    stdin: createTtyStdin(),
+    stderr: stderr.stream,
+    cwd: repo.dir,
+    promptApi: prompt.promptApi,
+  });
 
   assert.equal(exitCode, 1);
   assert.match(stderr.text(), /Install destination collisions detected/);

@@ -384,15 +384,10 @@ test("--skill install delegates to installer with exported tar input", async (t)
   assert.match(installedContent, /name: alpha/);
 });
 
-test("--skill install supports multiple ids and multiple scopes", async (t) => {
+test("--skill install supports multiple ids with a single scope", async (t) => {
   const repo = await makeTempDir("skillflag-install-multi-repo-");
-  const codexHome = await makeTempDir("skillflag-install-multi-codex-home-");
-  const previousCodexHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = codexHome.dir;
   t.after(async () => {
-    process.env.CODEX_HOME = previousCodexHome;
     await repo.cleanup();
-    await codexHome.cleanup();
   });
 
   initGit(repo.dir);
@@ -412,8 +407,6 @@ test("--skill install supports multiple ids and multiple scopes", async (t) => {
       "codex",
       "--scope",
       "repo",
-      "--scope",
-      "user",
     ],
     {
       skillsRoot: fixturesRoot,
@@ -431,24 +424,54 @@ test("--skill install supports multiple ids and multiple scopes", async (t) => {
 
   await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
   await fs.access(path.join(repo.dir, ".codex/skills/beta/SKILL.md"));
-  await fs.access(path.join(codexHome.dir, "skills/alpha/SKILL.md"));
-  await fs.access(path.join(codexHome.dir, "skills/beta/SKILL.md"));
 });
 
-test("--skill install supports multiple agents and multiple scopes", async (t) => {
-  const repo = await makeTempDir("skillflag-install-agents-repo-");
-  const codexHome = await makeTempDir("skillflag-install-agents-codex-home-");
-  const home = await makeTempDir("skillflag-install-agents-home-");
-  const previousCodexHome = process.env.CODEX_HOME;
-  const previousHome = process.env.HOME;
-  process.env.CODEX_HOME = codexHome.dir;
-  process.env.HOME = home.dir;
+test("--skill install rejects repeated --scope flags", async (t) => {
+  const repo = await makeTempDir("skillflag-install-repeat-scope-repo-");
   t.after(async () => {
-    process.env.CODEX_HOME = previousCodexHome;
-    process.env.HOME = previousHome;
     await repo.cleanup();
-    await codexHome.cleanup();
-    await home.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+      "--scope",
+      "user",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one --scope flag is allowed/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md")),
+  );
+});
+
+test("--skill install rejects repeated --agent flags", async (t) => {
+  const repo = await makeTempDir("skillflag-install-agents-repo-");
+  t.after(async () => {
+    await repo.cleanup();
   });
 
   initGit(repo.dir);
@@ -469,8 +492,6 @@ test("--skill install supports multiple agents and multiple scopes", async (t) =
       "claude",
       "--scope",
       "repo",
-      "--scope",
-      "user",
     ],
     {
       skillsRoot: fixturesRoot,
@@ -482,17 +503,14 @@ test("--skill install supports multiple agents and multiple scopes", async (t) =
     },
   );
 
-  assert.equal(exitCode, 0);
-  const installLines = stderr
-    .text()
-    .split("\n")
-    .filter((line) => line.startsWith("Installed "));
-  assert.equal(installLines.length, 4);
-
-  await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
-  await fs.access(path.join(repo.dir, ".claude/skills/alpha/SKILL.md"));
-  await fs.access(path.join(codexHome.dir, "skills/alpha/SKILL.md"));
-  await fs.access(path.join(home.dir, ".claude/skills/alpha/SKILL.md"));
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one --agent flag is allowed/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md")),
+  );
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".claude/skills/alpha/SKILL.md")),
+  );
 });
 
 test("--skill install without id in non-interactive mode requires explicit ids when multiple skills exist", async () => {

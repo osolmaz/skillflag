@@ -384,7 +384,9 @@ skill-install [PATH ...]
   [--legacy]        # only where a legacy target exists (vscode/copilot -> .claude/skills)
 ```
 
-Implementations **MAY** accept repeated and/or comma-separated `--agent` and `--scope` flags, and apply an install matrix across selected sources and targets.
+The reference implementation accepts only one value for `--agent` and one value for `--scope`.
+Repeated flags and comma-separated values are rejected.
+Multi-target installs remain available through the interactive wizard (multi-select).
 
 ### 2.2 Required flags
 
