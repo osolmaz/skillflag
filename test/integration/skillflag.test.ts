@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { Readable } from "node:stream";
 import * as tar from "tar-stream";
 import { fileURLToPath } from "node:url";
@@ -14,11 +14,17 @@ import {
   SKILLFLAG_HELP_TEXT,
   findSkillsRoot,
 } from "../../src/index.js";
+import { collectSkillEntries, createTarStream } from "../../src/core/tar.js";
 import { createCapture } from "../helpers/capture.js";
 import { makeTempDir, writeFile } from "../helpers/tmp.js";
 
 const fixturesRoot = path.resolve(process.cwd(), "test/fixtures/skills");
 const bundledSkillsRoot = path.resolve(process.cwd(), "skills");
+const skillflagBinaryPath = path.resolve(
+  process.cwd(),
+  "dist-test/src/bin/skillflag.js",
+);
+const PROMPT_CANCEL = Symbol("prompt-cancel");
 
 function initGit(repoDir: string): void {
   execFileSync("git", ["init"], { cwd: repoDir });
@@ -28,6 +34,23 @@ function sha256(buffer: Buffer): string {
   const hash = createHash("sha256");
   hash.update(buffer);
   return `sha256:${hash.digest("hex")}`;
+}
+
+async function bufferFromStream(
+  stream: NodeJS.ReadableStream,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
+function createTtyStdin(): Readable {
+  const stdin = Readable.from([]);
+  (stdin as Readable & { isTTY?: boolean }).isTTY = true;
+  return stdin;
 }
 
 async function collectTarEntries(buffer: Buffer): Promise<string[]> {
@@ -548,4 +571,122 @@ test("--skill install without id picks the only available skill", async (t) => {
   );
   const installedContent = await fs.readFile(installedPath, "utf8");
   assert.match(installedContent, /name: only-skill/);
+});
+
+test("--skill install supports interactive multi-select when multiple skills are available", async (t) => {
+  const repo = await makeTempDir("skillflag-install-select-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: createTtyStdin(),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+      promptApi: {
+        multiselect: async <Value>() => ["alpha", "beta"] as Value[],
+        isCancel: (value): value is symbol => value === PROMPT_CANCEL,
+      },
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed alpha to/);
+  assert.match(stderr.text(), /Installed beta to/);
+  await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
+  await fs.access(path.join(repo.dir, ".codex/skills/beta/SKILL.md"));
+});
+
+test("skillflag binary routes install PATH to the installer CLI", async (t) => {
+  const repo = await makeTempDir("skillflag-bin-install-repo-");
+  const skill = await makeTempDir("skillflag-bin-install-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: skillflag-bin-path\ndescription: Binary install path test\n---\n",
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      skillflagBinaryPath,
+      "install",
+      skill.dir,
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      cwd: repo.dir,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Installed skillflag-bin-path to/);
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/skillflag-bin-path/SKILL.md"),
+  );
+});
+
+test("skillflag binary routes piped tar install to the installer CLI", async (t) => {
+  const repo = await makeTempDir("skillflag-bin-tar-repo-");
+  const skill = await makeTempDir("skillflag-bin-tar-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: skillflag-bin-tar\ndescription: Binary install tar test\n---\n",
+  );
+  await writeFile(skill.dir, "templates/example.txt", "hello\n");
+
+  const { entries } = await collectSkillEntries(skill.dir, "skillflag-bin-tar");
+  const tarBuffer = await bufferFromStream(createTarStream(entries));
+
+  const result = spawnSync(
+    process.execPath,
+    [skillflagBinaryPath, "install", "--agent", "codex", "--scope", "repo"],
+    {
+      cwd: repo.dir,
+      encoding: "utf8",
+      input: tarBuffer,
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Installed skillflag-bin-tar to/);
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/skillflag-bin-tar/SKILL.md"),
+  );
 });
