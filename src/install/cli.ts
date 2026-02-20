@@ -135,16 +135,16 @@ const scopeList = SCOPES.join(", ");
 
 const usageLines = [
   "Usage:",
-  "  skill-install [PATH ...] [--agent <agent>[,<agent>...]] [--scope <scope>[,<scope>...]] [--force]",
+  "  skill-install [PATH ...] [--agent <agent>] [--scope <scope>] [--force]",
   "",
   "Input:",
   "  PATH ...            Skill directory path(s) containing SKILL.md.",
   "  stdin tar stream    If PATH is omitted, reads a tar bundle from stdin.",
   "",
   "Options:",
-  "  --agent <values>    Target agent(s); repeat or use comma-separated values.",
+  "  --agent <value>     Target agent (single value).",
   `                      Supported agents: ${agentList}`,
-  "  --scope <values>    Target scope(s); repeat or use comma-separated values.",
+  "  --scope <value>     Target scope (single value).",
   `                      Supported scopes: ${scopeList}`,
   "  --force             Overwrite destination if it already exists.",
   "  -h, --help          Show this help.",
@@ -152,6 +152,8 @@ const usageLines = [
   "Behavior:",
   "  If --agent or --scope is missing and an interactive TTY is available,",
   "  the installer launches a wizard to collect missing values.",
+  "  CLI flags accept only one --agent and one --scope.",
+  "  Use the wizard to select multiple agents/scopes.",
 ];
 
 const usageText = usageLines.join("\n");
@@ -192,51 +194,61 @@ const scopeDescriptions: Record<Scope, string> = {
   cwd: "Install relative to the current working directory.",
 };
 
-function parseScopeValues(value: string | undefined): string[] {
+function parseScopeValue(value: string | undefined): string {
   if (!value || value.startsWith("-")) {
     throw new InstallError("Missing value for --scope.");
   }
-  const scopes = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  if (scopes.length === 0) {
+  const scope = value.trim();
+  if (scope.length === 0) {
     throw new InstallError("Missing value for --scope.");
   }
-  return scopes;
+  if (scope.includes(",")) {
+    throw new InstallError(
+      "Only one value is allowed for --scope. Comma-separated values are not supported.",
+    );
+  }
+  return scope;
 }
 
-function parseAgentValues(value: string | undefined): string[] {
+function parseAgentValue(value: string | undefined): string {
   if (!value || value.startsWith("-")) {
     throw new InstallError("Missing value for --agent.");
   }
-  const agents = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  if (agents.length === 0) {
+  const agent = value.trim();
+  if (agent.length === 0) {
     throw new InstallError("Missing value for --agent.");
   }
-  return agents;
+  if (agent.includes(",")) {
+    throw new InstallError(
+      "Only one value is allowed for --agent. Comma-separated values are not supported.",
+    );
+  }
+  return agent;
 }
 
 function parseArgs(args: string[]): ParsedArgs {
   const rest = [...args];
   const inputPaths: string[] = [];
-  const agents: string[] = [];
-  const scopes: string[] = [];
+  let agentValue: string | undefined;
+  let scopeValue: string | undefined;
   let force = false;
   let help = false;
 
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === "--agent") {
-      agents.push(...parseAgentValues(rest[i + 1]));
+      if (agentValue !== undefined) {
+        throw new InstallError("Only one --agent flag is allowed.");
+      }
+      agentValue = parseAgentValue(rest[i + 1]);
       i += 1;
       continue;
     }
     if (arg === "--scope") {
-      scopes.push(...parseScopeValues(rest[i + 1]));
+      if (scopeValue !== undefined) {
+        throw new InstallError("Only one --scope flag is allowed.");
+      }
+      scopeValue = parseScopeValue(rest[i + 1]);
       i += 1;
       continue;
     }
@@ -256,8 +268,8 @@ function parseArgs(args: string[]): ParsedArgs {
 
   return {
     inputPaths,
-    agents: uniqueValues(agents),
-    scopes: uniqueValues(scopes),
+    agents: agentValue ? [agentValue] : [],
+    scopes: scopeValue ? [scopeValue] : [],
     force,
     help,
   };

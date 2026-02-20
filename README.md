@@ -77,13 +77,14 @@ The wizard lets you pick agents and scopes with arrow keys and space to select, 
 
 ### Multi-target install
 
-You can install to multiple agents and scopes in one command:
+`--agent` and `--scope` flags accept a single value each.
+To install to multiple agents/scopes in one run, use the interactive wizard:
 
 ```bash
-<tool> --skill export <id> | npx skillflag install --agent codex --agent claude --scope repo --scope user
+<tool> --skill export <id> | npx skillflag install
 ```
 
-This installs to all combinations of the specified agents × scopes.
+In the wizard, select multiple entries with space, then confirm the matrix install.
 
 ## Add skillflag to your CLI
 
