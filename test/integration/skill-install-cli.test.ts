@@ -637,15 +637,7 @@ test("runInstallCli fails for unsupported agent/scope combinations", async (t) =
 
   const stderr = createCapture();
   const exitCode = await runInstallCli(
-    [
-      "node",
-      "skill-install",
-      skill.dir,
-      "--agent",
-      "claude",
-      "--scope",
-      "admin",
-    ],
+    ["node", "skill-install", skill.dir, "--agent", "claude", "--scope", "cwd"],
     {
       stdin: Readable.from([]),
       stderr: stderr.stream,
@@ -654,7 +646,7 @@ test("runInstallCli fails for unsupported agent/scope combinations", async (t) =
   );
 
   assert.equal(exitCode, 1);
-  assert.match(stderr.text(), /Unsupported agent\/scope: claude admin/);
+  assert.match(stderr.text(), /Unsupported agent\/scope: claude cwd/);
 });
 
 test("runInstallCli detects collisions for different sources with the same skill name", async (t) => {

@@ -189,9 +189,7 @@ const agentOptions: Option<Agent>[] = AGENTS.map((agent) => ({
 const scopeDescriptions: Record<Scope, string> = {
   repo: "Install to the current git repo root.",
   user: "Install to your user-level skills directory.",
-  admin: "Install system-wide under /etc (typically needs sudo).",
   cwd: "Install relative to the current working directory.",
-  parent: "Install relative to the parent of the current directory.",
 };
 
 function parseScopeValues(value: string | undefined): string[] {

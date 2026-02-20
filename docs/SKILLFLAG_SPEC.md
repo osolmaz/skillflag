@@ -372,7 +372,7 @@ producer --skill export tmux | skill-install --agent claude --scope user
 ```bash
 skill-install [PATH ...]
   --agent <pi|opencode|codex|claude|portable|vscode|copilot|amp|factory|cursor|goose>
-  --scope <repo|user|cwd|parent|admin>
+  --scope <repo|user|cwd>
   [--root <path>]
   [--mode <copy|link>]
   [--force]
@@ -477,18 +477,13 @@ OpenCode documents these locations (plus Claude-compatible ones it also searches
 
 ### 7.3 `--agent codex` (OpenAI Codex CLI / IDE)
 
-Codex documents multiple repo layers and user/admin/system scopes. ([OpenAI Developers][1])
+Codex documents repo and user-level scopes. ([OpenAI Developers][1])
 
 Default mapping:
 
 - `repo` → `<project-root>/.codex/skills/<skill_id>/`
 - `user` → `${CODEX_HOME:-~/.codex}/skills/<skill_id>/`
-- `admin` → `/etc/codex/skills/<skill_id>/` (if supported/allowed)
-
-Optional advanced repo scopes (because Codex distinguishes them):
-
 - `cwd` → `$PWD/.codex/skills/<skill_id>/`
-- `parent` → `$PWD/../.codex/skills/<skill_id>/` ([OpenAI Developers][1])
 
 ### 7.4 `--agent claude` (Claude Code)
 

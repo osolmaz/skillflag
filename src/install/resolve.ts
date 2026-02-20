@@ -18,7 +18,7 @@ export const AGENTS = [
   "cursor",
 ] as const;
 
-export const SCOPES = ["repo", "user", "admin", "cwd", "parent"] as const;
+export const SCOPES = ["repo", "user", "cwd"] as const;
 
 export type Agent = (typeof AGENTS)[number];
 export type Scope = (typeof SCOPES)[number];
@@ -46,12 +46,10 @@ const scopeResolversByAgent: Record<Agent, ScopeResolvers> = {
   codex: {
     repo: (cwd) => path.join(resolveRepoRoot(cwd), ".codex/skills"),
     cwd: (cwd) => path.join(cwd, ".codex/skills"),
-    parent: (cwd) => path.join(path.resolve(cwd, ".."), ".codex/skills"),
     user: () => {
       const root = process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
       return path.join(root, "skills");
     },
-    admin: () => "/etc/codex/skills",
   },
   claude: {
     repo: (cwd) => path.join(resolveRepoRoot(cwd), ".claude/skills"),
