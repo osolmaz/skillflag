@@ -538,7 +538,7 @@ async function runInstallWizard(
     const agentValues = await multiselect({
       message: "Agent targets",
       options: agentOptions,
-      initialValues: parsedAgents.length > 0 ? parsedAgents : ["codex"],
+      initialValues: parsedAgents.length > 0 ? parsedAgents : [],
       required: true,
       input: stdin,
       output: stdout,
@@ -569,8 +569,7 @@ async function runInstallWizard(
     const scopeValues = await multiselect({
       message: "Scope targets",
       options: scopeOptions,
-      initialValues:
-        parsedScopes.length > 0 ? parsedScopes : [supportedScopes[0]],
+      initialValues: parsedScopes.length > 0 ? parsedScopes : [],
       required: true,
       input: stdin,
       output: stdout,
