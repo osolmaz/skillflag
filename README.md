@@ -1,5 +1,11 @@
 # skillflag
 
+[![npm version](https://img.shields.io/npm/v/skillflag.svg)](https://www.npmjs.com/package/skillflag)
+[![npm downloads](https://img.shields.io/npm/dm/skillflag.svg)](https://www.npmjs.com/package/skillflag)
+[![CI](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/node/v/skillflag.svg)](https://nodejs.org)
+
 skillflag is a minimal CLI convention for bundling, listing and installing [agent skills](https://agentskills.io), so that you don't have to upload them to separate 3rd party skill registries.
 
 Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
