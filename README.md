@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/skillflag.svg)](https://www.npmjs.com/package/skillflag)
 [![npm downloads](https://img.shields.io/npm/dm/skillflag.svg)](https://www.npmjs.com/package/skillflag)
-[![CI](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml)
+[![Checks](https://github.com/osolmaz/skillflag/actions/workflows/checks.yaml/badge.svg)](https://github.com/osolmaz/skillflag/actions/workflows/checks.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/node/v/skillflag.svg)](https://nodejs.org)
 
