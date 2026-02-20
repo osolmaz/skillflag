@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { Readable } from "node:stream";
+import { Readable, type Writable } from "node:stream";
+import type { Option } from "@clack/prompts";
 
 import { runInstallCli, type InstallPromptApi } from "../../src/install/cli.js";
+import { collectSkillEntries, createTarStream } from "../../src/core/tar.js";
 import { createCapture } from "../helpers/capture.js";
 import { makeTempDir, writeFile } from "../helpers/tmp.js";
 
@@ -21,6 +23,46 @@ function createTtyStdin(): Readable {
   return stdin;
 }
 
+function createPipeStdin(buffer: Buffer): Readable {
+  const stdin = Readable.from([buffer]);
+  (stdin as Readable & { isTTY?: boolean }).isTTY = false;
+  return stdin;
+}
+
+function createCountingPipeStdin(totalBytes: number): {
+  stdin: Readable;
+  pushedBytes: () => number;
+} {
+  let pushed = 0;
+  const stdin = new Readable({
+    read() {
+      if (pushed >= totalBytes) {
+        this.push(null);
+        return;
+      }
+      const size = Math.min(16 * 1024, totalBytes - pushed);
+      pushed += size;
+      this.push(Buffer.alloc(size, 0x78));
+    },
+  });
+  (stdin as Readable & { isTTY?: boolean }).isTTY = false;
+  return {
+    stdin,
+    pushedBytes: () => pushed,
+  };
+}
+
+async function bufferFromStream(
+  stream: NodeJS.ReadableStream,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
 type PromptStubOptions = {
   textResponses?: Array<string | typeof PROMPT_CANCEL>;
   multiselectResponses?: Array<unknown[] | typeof PROMPT_CANCEL>;
@@ -31,6 +73,8 @@ type PromptStub = {
   promptApi: InstallPromptApi;
   notes: string[];
   outros: string[];
+  promptInputs: Array<Readable | undefined>;
+  promptOutputs: Array<Writable | undefined>;
 };
 
 function createPromptStub(options: PromptStubOptions = {}): PromptStub {
@@ -39,35 +83,69 @@ function createPromptStub(options: PromptStubOptions = {}): PromptStub {
   const confirmResponses = [...(options.confirmResponses ?? [])];
   const notes: string[] = [];
   const outros: string[] = [];
+  const promptInputs: Array<Readable | undefined> = [];
+  const promptOutputs: Array<Writable | undefined> = [];
+
+  const trackIo = (opts?: { input?: Readable; output?: Writable }): void => {
+    promptInputs.push(opts?.input);
+    promptOutputs.push(opts?.output);
+  };
 
   const promptApi: InstallPromptApi = {
-    confirm: async () => {
+    confirm: async (opts) => {
+      trackIo(opts);
       if (confirmResponses.length === 0) {
         throw new Error("No prompt stub response configured for confirm.");
       }
       return confirmResponses.shift() as boolean | symbol;
     },
-    intro: () => {},
+    intro: (_message, opts) => {
+      trackIo(opts);
+    },
     isCancel: (value: unknown): value is symbol => value === PROMPT_CANCEL,
-    multiselect: async <Value>() => {
+    multiselect: async <Value>(opts: {
+      message: string;
+      options: Option<Value>[];
+      initialValues?: Value[];
+      required?: boolean;
+      input?: Readable;
+      output?: Writable;
+    }) => {
+      trackIo(opts);
       if (multiselectResponses.length === 0) {
         throw new Error("No prompt stub response configured for multiselect.");
       }
       const response = multiselectResponses.shift();
       return response as Value[] | symbol;
     },
-    note: (message?: string) => {
+    note: (
+      message?: string,
+      _title?: string,
+      opts?: {
+        input?: Readable;
+        output?: Writable;
+      },
+    ) => {
+      trackIo(opts);
       notes.push(message ?? "");
     },
-    outro: (message?: string) => {
+    outro: (
+      message?: string,
+      opts?: { input?: Readable; output?: Writable },
+    ) => {
+      trackIo(opts);
       outros.push(message ?? "");
     },
-    spinner: () => ({
-      start: () => {},
-      stop: () => {},
-      error: () => {},
-    }),
-    text: async () => {
+    spinner: (opts) => {
+      trackIo(opts);
+      return {
+        start: () => {},
+        stop: () => {},
+        error: () => {},
+      };
+    },
+    text: async (opts) => {
+      trackIo(opts);
       if (textResponses.length === 0) {
         throw new Error("No prompt stub response configured for text.");
       }
@@ -75,7 +153,7 @@ function createPromptStub(options: PromptStubOptions = {}): PromptStub {
     },
   };
 
-  return { promptApi, notes, outros };
+  return { promptApi, notes, outros, promptInputs, promptOutputs };
 }
 
 test("runInstallCli requires flags without an interactive tty", async () => {
@@ -89,6 +167,117 @@ test("runInstallCli requires flags without an interactive tty", async () => {
   assert.equal(exitCode, 1);
   assert.match(stderr.text(), /Missing required flags/);
   assert.match(stderr.text(), /skill-install \[PATH/);
+});
+
+test("runInstallCli uses tty prompts when stdin is piped and required flags are missing", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-pipe-wizard-repo-");
+  const skill = await makeTempDir("skill-install-cli-pipe-wizard-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-pipe-wizard\ndescription: Pipe wizard skill\n---\n",
+  );
+  await writeFile(skill.dir, "templates/example.txt", "hello\n");
+
+  const { entries } = await collectSkillEntries(
+    skill.dir,
+    "cli-skill-pipe-wizard",
+  );
+  const tarBuffer = await bufferFromStream(createTarStream(entries));
+  const promptStdin = createTtyStdin();
+  const promptStdout = createCapture();
+  const prompt = createPromptStub({
+    multiselectResponses: [["codex"], ["repo"]],
+    confirmResponses: [false, true],
+  });
+  const stderr = createCapture();
+
+  const exitCode = await runInstallCli(["node", "skill-install"], {
+    stdin: createPipeStdin(tarBuffer),
+    stderr: stderr.stream,
+    cwd: repo.dir,
+    promptApi: prompt.promptApi,
+    openPromptTty: () => ({
+      input: promptStdin,
+      output: promptStdout.stream,
+      close: () => {},
+    }),
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed cli-skill-pipe-wizard to/);
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/cli-skill-pipe-wizard/SKILL.md"),
+  );
+  assert.ok(prompt.promptInputs.length > 0);
+  assert.ok(
+    prompt.promptInputs.every((input) => input === promptStdin),
+    "expected wizard prompts to use tty input",
+  );
+  assert.ok(
+    prompt.promptOutputs.every((output) => output === promptStdout.stream),
+    "expected wizard prompts to use tty output",
+  );
+});
+
+test("runInstallCli falls back to required flags and drains piped stdin when tty prompts are unavailable", async () => {
+  const stderr = createCapture();
+  const source = createCountingPipeStdin(256 * 1024);
+
+  const exitCode = await runInstallCli(["node", "skill-install"], {
+    stdin: source.stdin,
+    stderr: stderr.stream,
+    openPromptTty: () => null,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Missing required flags/);
+  assert.equal(source.pushedBytes(), 256 * 1024);
+});
+
+test("runInstallCli installs from piped tar with explicit flags non-interactively", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-pipe-flags-repo-");
+  const skill = await makeTempDir("skill-install-cli-pipe-flags-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-pipe-flags\ndescription: Pipe flags skill\n---\n",
+  );
+  await writeFile(skill.dir, "templates/example.txt", "hello\n");
+
+  const { entries } = await collectSkillEntries(
+    skill.dir,
+    "cli-skill-pipe-flags",
+  );
+  const tarBuffer = await bufferFromStream(createTarStream(entries));
+
+  const stderr = createCapture();
+  const exitCode = await runInstallCli(
+    ["node", "skill-install", "--agent", "codex", "--scope", "repo"],
+    {
+      stdin: createPipeStdin(tarBuffer),
+      stderr: stderr.stream,
+      cwd: repo.dir,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed cli-skill-pipe-flags to/);
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/cli-skill-pipe-flags/SKILL.md"),
+  );
 });
 
 test("runInstallCli keeps non-interactive install behavior with flags", async (t) => {

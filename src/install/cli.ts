@@ -34,6 +34,7 @@ export type InstallCliOptions = {
   stdout?: Writable;
   stderr?: Writable;
   cwd?: string;
+  openPromptTty?: () => PromptTtyStreams | null;
   providedInput?: InstallInput;
   providedInputs?: InstallInput[];
   providedSkillId?: string;
@@ -115,6 +116,12 @@ type InstallExecutionResult = {
 type WizardResult = {
   args: ResolvedInstallArgs;
   sources: PreparedInstallSource[];
+};
+
+type PromptTtyStreams = {
+  input: Readable;
+  output: Writable;
+  close: () => void;
 };
 
 const usageLines = [
@@ -237,6 +244,72 @@ function stdinIsTty(stream: Readable): boolean {
   return (stream as { isTTY?: boolean }).isTTY === true;
 }
 
+function stdinIsPipe(stream: Readable): boolean {
+  return (stream as { isTTY?: boolean }).isTTY === false;
+}
+
+function openPromptTty(): PromptTtyStreams | null {
+  let inputFd: number | undefined;
+  let outputFd: number | undefined;
+
+  try {
+    inputFd = fs.openSync("/dev/tty", "r");
+    outputFd = fs.openSync("/dev/tty", "w");
+    const promptInputFd = inputFd;
+    const promptOutputFd = outputFd;
+
+    const input = fs.createReadStream("/dev/tty", {
+      fd: inputFd,
+      autoClose: false,
+    });
+    const output = fs.createWriteStream("/dev/tty", {
+      fd: outputFd,
+      autoClose: false,
+    });
+
+    let closed = false;
+    return {
+      input,
+      output,
+      close: () => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+
+        input.destroy();
+        output.destroy();
+        try {
+          fs.closeSync(promptInputFd);
+        } catch {
+          // Ignore close errors.
+        }
+        try {
+          fs.closeSync(promptOutputFd);
+        } catch {
+          // Ignore close errors.
+        }
+      },
+    };
+  } catch {
+    if (inputFd !== undefined) {
+      try {
+        fs.closeSync(inputFd);
+      } catch {
+        // Ignore close errors.
+      }
+    }
+    if (outputFd !== undefined) {
+      try {
+        fs.closeSync(outputFd);
+      } catch {
+        // Ignore close errors.
+      }
+    }
+    return null;
+  }
+}
+
 function asAgent(value: string | undefined): Agent | undefined {
   if (!value) return undefined;
   try {
@@ -348,12 +421,12 @@ function validatePathPrompt(value: string | undefined): string | undefined {
 }
 
 function cancelWizard(
-  stdin: Readable,
-  stdout: Writable,
+  promptInput: Readable,
+  promptOutput: Writable,
   promptApi: InstallPromptApi,
   message = "Install cancelled.",
 ): null {
-  promptApi.outro(message, { input: stdin, output: stdout });
+  promptApi.outro(message, { input: promptInput, output: promptOutput });
   return null;
 }
 
@@ -494,15 +567,23 @@ function assertNoInstallCollisions(plan: InstallPlanItem[]): void {
 async function runInstallWizard(
   parsed: ParsedArgs,
   stdin: Readable,
-  stdout: Writable,
+  promptInput: Readable,
+  promptOutput: Writable,
   cwd: string,
   provided: ProvidedInstallInputs,
   promptApi: InstallPromptApi,
 ): Promise<WizardResult | null> {
-  promptApi.intro("skill-install wizard", { input: stdin, output: stdout });
+  promptApi.intro("skill-install wizard", {
+    input: promptInput,
+    output: promptOutput,
+  });
 
   let inputPaths = parsed.inputPaths;
-  if (provided.inputs.length === 0 && inputPaths.length === 0) {
+  if (
+    provided.inputs.length === 0 &&
+    inputPaths.length === 0 &&
+    !stdinHasData(stdin)
+  ) {
     const defaultPath = cwd;
     const pathValue = await promptApi.text({
       message:
@@ -510,11 +591,11 @@ async function runInstallWizard(
       placeholder: defaultPath,
       defaultValue: defaultPath,
       validate: validatePathPrompt,
-      input: stdin,
-      output: stdout,
+      input: promptInput,
+      output: promptOutput,
     });
     if (promptApi.isCancel(pathValue)) {
-      return cancelWizard(stdin, stdout, promptApi);
+      return cancelWizard(promptInput, promptOutput, promptApi);
     }
     inputPaths = parsePathList(pathValue.trim() || defaultPath);
   }
@@ -534,11 +615,11 @@ async function runInstallWizard(
       options: agentOptions,
       initialValues: parsedAgents.length > 0 ? parsedAgents : [],
       required: true,
-      input: stdin,
-      output: stdout,
+      input: promptInput,
+      output: promptOutput,
     });
     if (promptApi.isCancel(agentValues)) {
-      return cancelWizard(stdin, stdout, promptApi);
+      return cancelWizard(promptInput, promptOutput, promptApi);
     }
     agents = uniqueValues(agentValues.map((value) => assertAgent(value)));
   }
@@ -567,11 +648,11 @@ async function runInstallWizard(
       options: scopeOptions,
       initialValues: parsedScopes.length > 0 ? parsedScopes : [],
       required: true,
-      input: stdin,
-      output: stdout,
+      input: promptInput,
+      output: promptOutput,
     });
     if (promptApi.isCancel(scopeValues)) {
-      return cancelWizard(stdin, stdout, promptApi);
+      return cancelWizard(promptInput, promptOutput, promptApi);
     }
     scopes = uniqueValues(scopeValues.map((scope) => assertScope(scope)));
   }
@@ -579,11 +660,11 @@ async function runInstallWizard(
   const forceValue = await promptApi.confirm({
     message: "Force overwrite if the destination already exists? (--force)",
     initialValue: parsed.force,
-    input: stdin,
-    output: stdout,
+    input: promptInput,
+    output: promptOutput,
   });
   if (promptApi.isCancel(forceValue)) {
-    return cancelWizard(stdin, stdout, promptApi);
+    return cancelWizard(promptInput, promptOutput, promptApi);
   }
   const force = forceValue;
 
@@ -614,17 +695,17 @@ async function runInstallWizard(
       `Force: ${force ? "yes" : "no"}`,
     ].join("\n"),
     "Install summary",
-    { input: stdin, output: stdout },
+    { input: promptInput, output: promptOutput },
   );
 
   const confirmed = await promptApi.confirm({
     message: "Proceed with install?",
     initialValue: true,
-    input: stdin,
-    output: stdout,
+    input: promptInput,
+    output: promptOutput,
   });
   if (promptApi.isCancel(confirmed) || !confirmed) {
-    return cancelWizard(stdin, stdout, promptApi);
+    return cancelWizard(promptInput, promptOutput, promptApi);
   }
 
   return {
@@ -636,8 +717,8 @@ async function runInstallWizard(
 async function runInstall(
   args: ResolvedInstallArgs,
   sources: PreparedInstallSource[],
-  stdin: Readable,
-  stdout: Writable,
+  promptInput: Readable,
+  promptOutput: Writable,
   cwd: string,
   useSpinner: boolean,
   promptApi: InstallPromptApi,
@@ -663,7 +744,7 @@ async function runInstall(
     return execute();
   }
 
-  const s = promptApi.spinner({ input: stdin, output: stdout });
+  const s = promptApi.spinner({ input: promptInput, output: promptOutput });
   s.start(`Installing ${plan.length} target${plan.length === 1 ? "" : "s"}...`);
   try {
     const result = await execute();
@@ -672,6 +753,17 @@ async function runInstall(
   } catch (err) {
     s.error("Install failed.");
     throw err;
+  }
+}
+
+async function drainStream(stream: Readable): Promise<void> {
+  try {
+    for await (const chunk of stream) {
+      // Drain source stdin so upstream writers do not hit EPIPE when we exit early.
+      void chunk;
+    }
+  } catch {
+    // Ignore drain failures; original command error should still be reported.
   }
 }
 
@@ -684,6 +776,11 @@ export async function runInstallCli(
   const stdin = opts.stdin ?? process.stdin;
   const cwd = opts.cwd ?? process.cwd();
   const promptApi = opts.promptApi ?? defaultPromptApi;
+  const openPromptTtyFn = opts.openPromptTty ?? openPromptTty;
+
+  let promptInput = stdin;
+  let promptOutput = stdout;
+  let closePromptTty: (() => void) | null = null;
 
   try {
     const parsed = parseArgs(argv.slice(2));
@@ -700,7 +797,19 @@ export async function runInstallCli(
     let sources: PreparedInstallSource[];
 
     if (parsed.agents.length === 0 || parsed.scopes.length === 0) {
-      if (!stdinIsTty(stdin)) {
+      if (stdinIsTty(stdin)) {
+        wizardUsed = true;
+      } else if (stdinIsPipe(stdin) && stdinHasData(stdin)) {
+        const promptTty = openPromptTtyFn();
+        if (promptTty) {
+          wizardUsed = true;
+          promptInput = promptTty.input;
+          promptOutput = promptTty.output;
+          closePromptTty = promptTty.close;
+        }
+      }
+
+      if (!wizardUsed) {
         resolvedArgs = validateRequiredFlags(parsed);
         sources = await resolveInstallSources(
           resolvedArgs.inputPaths,
@@ -708,16 +817,19 @@ export async function runInstallCli(
           provided,
         );
       } else {
-        wizardUsed = true;
         const wizardResult = await runInstallWizard(
           parsed,
           stdin,
-          stdout,
+          promptInput,
+          promptOutput,
           cwd,
           provided,
           promptApi,
         );
         if (!wizardResult) {
+          if (stdinIsPipe(stdin)) {
+            await drainStream(stdin);
+          }
           return 1;
         }
         resolvedArgs = wizardResult.args;
@@ -735,8 +847,8 @@ export async function runInstallCli(
     const results = await runInstall(
       resolvedArgs,
       sources,
-      stdin,
-      stdout,
+      promptInput,
+      promptOutput,
       cwd,
       wizardUsed,
       promptApi,
@@ -748,11 +860,16 @@ export async function runInstallCli(
       );
     }
     if (wizardUsed) {
-      promptApi.outro("Done.", { input: stdin, output: stdout });
+      promptApi.outro("Done.", { input: promptInput, output: promptOutput });
     }
     return 0;
   } catch (err) {
+    if (stdinIsPipe(stdin)) {
+      await drainStream(stdin);
+    }
     stderr.write(`${toErrorMessage(err)}\n`);
     return err instanceof InstallError ? err.exitCode : 1;
+  } finally {
+    closePromptTty?.();
   }
 }
