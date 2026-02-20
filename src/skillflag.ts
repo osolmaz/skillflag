@@ -14,6 +14,7 @@ import {
 import { showSkill } from "./core/show.js";
 import { collectSkillEntries, createTarStream } from "./core/tar.js";
 import { runInstallCli } from "./install/cli.js";
+import { uniqueValues } from "./utils/collections.js";
 
 export type SkillflagOptions = {
   skillsRoot: URL | string;
@@ -22,6 +23,7 @@ export type SkillflagOptions = {
   stderr?: NodeJS.WritableStream;
   cwd?: string;
   includeBundledSkill?: boolean;
+  promptApi?: SkillflagPromptApi;
 };
 
 export type SkillflagDispatchOptions = SkillflagOptions & {
@@ -34,6 +36,17 @@ type SkillAction =
   | { kind: "export"; id: string }
   | { kind: "show"; id: string }
   | { kind: "help" };
+
+export type SkillflagPromptApi = {
+  multiselect: <Value>(opts: {
+    message: string;
+    options: Option<Value>[];
+    required?: boolean;
+    input?: Readable;
+    output?: Writable;
+  }) => Promise<Value[] | symbol>;
+  isCancel: (value: unknown) => value is symbol;
+};
 
 const usageLines = [
   "Usage:",
@@ -71,41 +84,18 @@ export const SKILLFLAG_HELP_TEXT = [
   "For full details, read docs/SKILLFLAG_SPEC.md.",
 ].join("\n");
 
-function isSkillActionKind(value: string | undefined): boolean {
-  return (
-    value === "install" ||
-    value === "list" ||
-    value === "export" ||
-    value === "show" ||
-    value === "help"
-  );
-}
+const defaultPromptApi: SkillflagPromptApi = {
+  multiselect,
+  isCancel,
+};
 
-function uniqueValues<T>(values: T[]): T[] {
-  const out: T[] = [];
-  for (const value of values) {
-    if (!out.includes(value)) {
-      out.push(value);
-    }
+function resolveSkillActionArgs(argv: string[]): string[] {
+  const cliArgs = argv.length > 2 ? argv.slice(2) : [...argv];
+  const skillIndex = cliArgs.indexOf("--skill");
+  if (skillIndex >= 0) {
+    return cliArgs.slice(skillIndex + 1);
   }
-  return out;
-}
-
-function extractSkillArgs(argv: string[]): string[] {
-  const idx = argv.indexOf("--skill");
-  if (idx !== -1) {
-    return argv.slice(idx + 1);
-  }
-  if (isSkillActionKind(argv[0])) {
-    return argv;
-  }
-  if (isSkillActionKind(argv[1])) {
-    return argv.slice(1);
-  }
-  if (isSkillActionKind(argv[2])) {
-    return argv.slice(2);
-  }
-  return argv;
+  return cliArgs;
 }
 
 function parseInstallIds(values: string[]): {
@@ -135,8 +125,18 @@ function parseInstallIds(values: string[]): {
   };
 }
 
+/**
+ * Parse skillflag action arguments from argv.
+ *
+ * Expected forms:
+ * - Node-style argv: `[execPath, scriptPath, ...cliArgs]`
+ * - Already-trimmed args: `["--skill", "list"]` or `["list"]`
+ *
+ * For producer CLIs, parsing starts right after `--skill`.
+ * For the standalone `skillflag` binary, parsing starts at `cliArgs[0]`.
+ */
 function parseSkillArgs(argv: string[]): SkillAction {
-  const args = extractSkillArgs(argv);
+  const args = resolveSkillActionArgs(argv);
   const action = args[0];
   if (!action || action.startsWith("-")) {
     throw new SkillflagError(
@@ -185,6 +185,7 @@ async function resolveInstallSkillIds(
   rootDirs: string[],
   stdin: NodeJS.ReadableStream,
   stdout: NodeJS.WritableStream,
+  promptApi: SkillflagPromptApi,
 ): Promise<string[]> {
   if (action.ids && action.ids.length > 0) {
     return action.ids;
@@ -210,14 +211,14 @@ async function resolveInstallSkillIds(
     label: skill.id,
     hint: skill.summary,
   }));
-  const selected = await multiselect({
+  const selected = await promptApi.multiselect({
     message: "Select skills to install",
     options,
     required: true,
     input: stdin as Readable,
     output: stdout as Writable,
   });
-  if (isCancel(selected)) {
+  if (promptApi.isCancel(selected)) {
     throw new SkillflagError("Install cancelled.");
   }
   return uniqueValues(selected);
@@ -231,11 +232,13 @@ async function runInstallAction(
   stdout: NodeJS.WritableStream,
   stderr: NodeJS.WritableStream,
 ): Promise<number> {
+  const promptApi = opts.promptApi ?? defaultPromptApi;
   const skillIds = await resolveInstallSkillIds(
     action,
     rootDirs,
     stdin,
     stdout,
+    promptApi,
   );
 
   const inputs = await Promise.all(
