@@ -465,6 +465,8 @@ If the producer provides a digest (via `--skill list --json`), installers **shou
 
 ## 7) Destination mapping (what `--agent` + `--scope` means)
 
+The agent list below is maintained by the reference implementation and is not normative. Implementations MAY support additional agents. The `--dest` escape hatch provides forward compatibility for unlisted agents.
+
 This section is intentionally concrete and only covers widely-used tools with documented/observable conventions.
 
 ### 7.1 `--agent pi` (Pi / pi-mono)
