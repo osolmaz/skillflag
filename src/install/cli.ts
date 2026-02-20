@@ -824,7 +824,7 @@ export async function runInstallCli(
       return 0;
     }
 
-    const provided = normalizeProvidedInputs(opts);
+    let provided = normalizeProvidedInputs(opts);
     if (provided.inputs.length > 0 && parsed.inputPaths.length > 0) {
       throw new InstallError(
         "PATH cannot be used when install input is preset.",
@@ -857,6 +857,21 @@ export async function runInstallCli(
           provided,
         );
       } else {
+        if (
+          stdinIsPipe(stdin) &&
+          stdinHasData(stdin) &&
+          parsed.inputPaths.length === 0 &&
+          provided.inputs.length === 0
+        ) {
+          // Drain piped tar input before prompting so interactive key handling
+          // is not affected by an active upstream writer in the same pipeline.
+          const stdinTarBuffer = await streamToBuffer(stdin);
+          provided = {
+            inputs: [{ kind: "tar", stream: Readable.from(stdinTarBuffer) }],
+            skillIds: [],
+          };
+        }
+
         const wizardResult = await runInstallWizard(
           parsed,
           stdin,

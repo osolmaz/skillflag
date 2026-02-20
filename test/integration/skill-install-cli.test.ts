@@ -242,6 +242,73 @@ test("runInstallCli uses tty prompts when stdin is piped and required flags are 
   );
 });
 
+test("runInstallCli buffers piped stdin before interactive wizard prompts", async (t) => {
+  const repo = await makeTempDir("skill-install-cli-pipe-buffer-repo-");
+  const skill = await makeTempDir("skill-install-cli-pipe-buffer-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: cli-skill-pipe-buffer\ndescription: Pipe buffer skill\n---\n",
+  );
+  await writeFile(skill.dir, "templates/example.txt", "hello\n");
+
+  const { entries } = await collectSkillEntries(
+    skill.dir,
+    "cli-skill-pipe-buffer",
+  );
+  const tarBuffer = await bufferFromStream(createTarStream(entries));
+  const sourceStdin = createPipeStdin(tarBuffer);
+  const promptStdin = createTtyStdin();
+  const promptStdout = createCapture();
+  const stderr = createCapture();
+
+  let observedSourceEndedAtFirstPrompt: boolean | undefined;
+  const multiselectResponses: Array<string[]> = [["codex"], ["repo"]];
+  const confirmResponses = [false, true];
+
+  const promptApi: InstallPromptApi = {
+    confirm: async () => confirmResponses.shift() as boolean,
+    intro: () => {},
+    isCancel: (value: unknown): value is symbol => typeof value === "symbol",
+    multiselect: async <Value>() => {
+      if (observedSourceEndedAtFirstPrompt === undefined) {
+        observedSourceEndedAtFirstPrompt = sourceStdin.readableEnded;
+      }
+      return multiselectResponses.shift() as Value[];
+    },
+    note: () => {},
+    outro: () => {},
+    spinner: () => ({
+      start: () => {},
+      stop: () => {},
+      error: () => {},
+    }),
+    text: async () => "",
+  };
+
+  const exitCode = await runInstallCli(["node", "skill-install"], {
+    stdin: sourceStdin,
+    stderr: stderr.stream,
+    cwd: repo.dir,
+    promptApi,
+    openPromptTty: () => ({
+      input: promptStdin,
+      output: promptStdout.stream,
+      close: () => {},
+    }),
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(observedSourceEndedAtFirstPrompt, true);
+  assert.match(stderr.text(), /Installed cli-skill-pipe-buffer to/);
+});
+
 test("runInstallCli falls back to required flags and drains piped stdin when tty prompts are unavailable", async () => {
   const stderr = createCapture();
   const source = createCountingPipeStdin(256 * 1024);
