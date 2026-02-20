@@ -45,15 +45,7 @@ test("runInstallCli keeps non-interactive install behavior with flags", async (t
 
   const stderr = createCapture();
   const exitCode = await runInstallCli(
-    [
-      "node",
-      "skill-install",
-      skill.dir,
-      "--agent",
-      "codex",
-      "--scope",
-      "repo",
-    ],
+    ["node", "skill-install", skill.dir, "--agent", "codex", "--scope", "repo"],
     {
       stdin: Readable.from([]),
       stderr: stderr.stream,
@@ -64,7 +56,10 @@ test("runInstallCli keeps non-interactive install behavior with flags", async (t
   assert.equal(exitCode, 0);
   assert.match(stderr.text(), /Installed cli-skill to/);
 
-  const installedSkill = path.join(repo.dir, ".codex/skills/cli-skill/SKILL.md");
+  const installedSkill = path.join(
+    repo.dir,
+    ".codex/skills/cli-skill/SKILL.md",
+  );
   const installedContent = await fs.readFile(installedSkill, "utf8");
   assert.match(installedContent, /name: cli-skill/);
 });

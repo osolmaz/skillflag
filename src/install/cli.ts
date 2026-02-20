@@ -285,7 +285,9 @@ async function runInstallWizard(
     label: scope,
     hint:
       scopeDescriptions[scope] +
-      (supportedScopes.includes(scope) ? "" : " (not supported for this agent)"),
+      (supportedScopes.includes(scope)
+        ? ""
+        : " (not supported for this agent)"),
     disabled: !supportedScopes.includes(scope),
   }));
   const scopeValue = await select({
@@ -384,15 +386,16 @@ export async function runInstallCli(
     const parsed = parseArgs(argv.slice(2));
     let wizardUsed = false;
 
-    const installArgs = !parsed.agent || !parsed.scope
-      ? (() => {
-          if (!stdinIsTty(stdin)) {
-            return validateRequiredFlags(parsed);
-          }
-          wizardUsed = true;
-          return null;
-        })()
-      : validateRequiredFlags(parsed);
+    const installArgs =
+      !parsed.agent || !parsed.scope
+        ? (() => {
+            if (!stdinIsTty(stdin)) {
+              return validateRequiredFlags(parsed);
+            }
+            wizardUsed = true;
+            return null;
+          })()
+        : validateRequiredFlags(parsed);
 
     const resolved =
       installArgs ?? (await runInstallWizard(parsed, stdin, stdout, cwd));
@@ -400,13 +403,7 @@ export async function runInstallCli(
       return 1;
     }
 
-    const result = await runInstall(
-      resolved,
-      stdin,
-      stdout,
-      cwd,
-      wizardUsed,
-    );
+    const result = await runInstall(resolved, stdin, stdout, cwd, wizardUsed);
 
     stderr.write(`Installed ${result.skillId} to ${result.installedTo}\n`);
     if (wizardUsed) {
