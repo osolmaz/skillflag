@@ -1,6 +1,6 @@
 import process from "node:process";
 import type { Readable, Writable } from "node:stream";
-import { isCancel, select } from "@clack/prompts";
+import { isCancel, multiselect } from "@clack/prompts";
 import type { Option } from "@clack/prompts";
 
 import { SkillflagError, toErrorMessage } from "./core/errors.js";
@@ -29,7 +29,7 @@ export type SkillflagDispatchOptions = SkillflagOptions & {
 };
 
 type SkillAction =
-  | { kind: "install"; id?: string; installArgs: string[] }
+  | { kind: "install"; ids?: string[]; installArgs: string[] }
   | { kind: "list"; json: boolean }
   | { kind: "export"; id: string }
   | { kind: "show"; id: string }
@@ -37,7 +37,7 @@ type SkillAction =
 
 const usageLines = [
   "Usage:",
-  "  --skill install [<id>] [--agent <agent>] [--scope <scope>] [--force]",
+  "  --skill install [<id> ...] [--agent <agent>] [--scope <scope>] [--force]",
   "  --skill list [--json]",
   "  --skill export <id>",
   "  --skill show <id>",
@@ -65,7 +65,7 @@ export const SKILLFLAG_HELP_TEXT = [
   "  tool --skill export <id>",
   "",
   "Install a skill bundle into an agent:",
-  "  tool --skill install [<id>]",
+  "  tool --skill install [<id> ...]",
   "  tool --skill export <id> | skill-install --agent <agent> --scope <scope>",
   "",
   "For full details, read docs/SKILLFLAG_SPEC.md.",
@@ -79,6 +79,16 @@ function isSkillActionKind(value: string | undefined): boolean {
     value === "show" ||
     value === "help"
   );
+}
+
+function uniqueValues<T>(values: T[]): T[] {
+  const out: T[] = [];
+  for (const value of values) {
+    if (!out.includes(value)) {
+      out.push(value);
+    }
+  }
+  return out;
 }
 
 function extractSkillArgs(argv: string[]): string[] {
@@ -98,6 +108,33 @@ function extractSkillArgs(argv: string[]): string[] {
   return argv;
 }
 
+function parseInstallIds(values: string[]): {
+  ids?: string[];
+  installArgs: string[];
+} {
+  const ids: string[] = [];
+  let index = 0;
+
+  while (index < values.length) {
+    const value = values[index];
+    if (value.startsWith("-")) {
+      break;
+    }
+
+    const parsed = value
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    ids.push(...parsed);
+    index += 1;
+  }
+
+  return {
+    ids: ids.length > 0 ? uniqueValues(ids) : undefined,
+    installArgs: values.slice(index),
+  };
+}
+
 function parseSkillArgs(argv: string[]): SkillAction {
   const args = extractSkillArgs(argv);
   const action = args[0];
@@ -109,10 +146,12 @@ function parseSkillArgs(argv: string[]): SkillAction {
 
   if (action === "install") {
     const rest = args.slice(1);
-    if (rest[0] && !rest[0].startsWith("-")) {
-      return { kind: "install", id: rest[0], installArgs: rest.slice(1) };
-    }
-    return { kind: "install", installArgs: rest };
+    const parsed = parseInstallIds(rest);
+    return {
+      kind: "install",
+      ids: parsed.ids,
+      installArgs: parsed.installArgs,
+    };
   }
 
   if (action === "list") {
@@ -141,14 +180,14 @@ function stdinIsTty(stream: NodeJS.ReadableStream): boolean {
   return (stream as { isTTY?: boolean }).isTTY === true;
 }
 
-async function resolveInstallSkillId(
-  action: { id?: string },
+async function resolveInstallSkillIds(
+  action: { ids?: string[] },
   rootDirs: string[],
   stdin: NodeJS.ReadableStream,
   stdout: NodeJS.WritableStream,
-): Promise<string> {
-  if (action.id) {
-    return action.id;
+): Promise<string[]> {
+  if (action.ids && action.ids.length > 0) {
+    return action.ids;
   }
 
   const skills = await listSkills(rootDirs);
@@ -157,12 +196,12 @@ async function resolveInstallSkillId(
   }
 
   if (skills.length === 1) {
-    return skills[0].id;
+    return [skills[0].id];
   }
 
   if (!stdinIsTty(stdin)) {
     throw new SkillflagError(
-      "Multiple skills are available; pass an id with --skill install <id>.",
+      "Multiple skills are available; pass one or more ids with --skill install <id> [...].",
     );
   }
 
@@ -171,38 +210,49 @@ async function resolveInstallSkillId(
     label: skill.id,
     hint: skill.summary,
   }));
-  const selected = await select({
-    message: "Select a skill to install",
+  const selected = await multiselect({
+    message: "Select skills to install",
     options,
+    required: true,
     input: stdin as Readable,
     output: stdout as Writable,
   });
   if (isCancel(selected)) {
     throw new SkillflagError("Install cancelled.");
   }
-  return selected;
+  return uniqueValues(selected);
 }
 
 async function runInstallAction(
-  action: { id?: string; installArgs: string[] },
+  action: { ids?: string[]; installArgs: string[] },
   rootDirs: string[],
   opts: SkillflagOptions,
   stdin: NodeJS.ReadableStream,
   stdout: NodeJS.WritableStream,
   stderr: NodeJS.WritableStream,
 ): Promise<number> {
-  const skillId = await resolveInstallSkillId(action, rootDirs, stdin, stdout);
-  const skillDir = await resolveSkillDirFromRoots(rootDirs, skillId);
-  const { entries } = await collectSkillEntries(skillDir, skillId);
-  const stream = createTarStream(entries);
+  const skillIds = await resolveInstallSkillIds(
+    action,
+    rootDirs,
+    stdin,
+    stdout,
+  );
+
+  const inputs = await Promise.all(
+    skillIds.map(async (skillId) => {
+      const skillDir = await resolveSkillDirFromRoots(rootDirs, skillId);
+      const { entries } = await collectSkillEntries(skillDir, skillId);
+      return { kind: "tar" as const, stream: createTarStream(entries) };
+    }),
+  );
 
   return runInstallCli(["node", "skill-install", ...action.installArgs], {
     stdin: stdin as Readable,
     stdout: stdout as Writable,
     stderr: stderr as Writable,
     cwd: opts.cwd,
-    providedInput: { kind: "tar", stream },
-    providedSkillId: skillId,
+    providedInputs: inputs,
+    providedSkillIds: skillIds,
   });
 }
 
@@ -225,7 +275,14 @@ export async function handleSkillflag(
         : [skillsRoot];
 
     if (action.kind === "install") {
-      return runInstallAction(action, rootDirs, opts, stdin, stdout, stderr);
+      return await runInstallAction(
+        action,
+        rootDirs,
+        opts,
+        stdin,
+        stdout,
+        stderr,
+      );
     }
 
     if (action.kind === "list") {
