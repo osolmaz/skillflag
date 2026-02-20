@@ -1,6 +1,10 @@
 import process from "node:process";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  ReadStream as TtyReadStream,
+  WriteStream as TtyWriteStream,
+} from "node:tty";
 import { Readable, Writable } from "node:stream";
 import {
   confirm,
@@ -293,14 +297,9 @@ function openPromptTty(): PromptTtyStreams | null {
     const promptInputFd = inputFd;
     const promptOutputFd = outputFd;
 
-    const input = fs.createReadStream("/dev/tty", {
-      fd: inputFd,
-      autoClose: false,
-    });
-    const output = fs.createWriteStream("/dev/tty", {
-      fd: outputFd,
-      autoClose: false,
-    });
+    // Use tty streams so prompt libraries can switch raw mode and parse arrows.
+    const input = new TtyReadStream(promptInputFd);
+    const output = new TtyWriteStream(promptOutputFd);
 
     let closed = false;
     return {
