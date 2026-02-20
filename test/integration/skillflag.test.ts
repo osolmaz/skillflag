@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { Readable } from "node:stream";
 import * as tar from "tar-stream";
 import { fileURLToPath } from "node:url";
 
@@ -10,12 +12,17 @@ import {
   handleSkillflag,
   maybeHandleSkillflag,
   SKILLFLAG_HELP_TEXT,
-} from "../../src/core/skillflag.js";
-import { findSkillsRoot } from "../../src/core/paths.js";
+  findSkillsRoot,
+} from "../../src/index.js";
 import { createCapture } from "../helpers/capture.js";
+import { makeTempDir, writeFile } from "../helpers/tmp.js";
 
 const fixturesRoot = path.resolve(process.cwd(), "test/fixtures/skills");
 const bundledSkillsRoot = path.resolve(process.cwd(), "skills");
+
+function initGit(repoDir: string): void {
+  execFileSync("git", ["init"], { cwd: repoDir });
+}
 
 function sha256(buffer: Buffer): string {
   const hash = createHash("sha256");
@@ -311,4 +318,95 @@ test("--skill help shows bundled skillflag docs", async () => {
   assert.equal(exitCode, 0);
   assert.equal(stderr.text(), "");
   assert.equal(stdout.text(), `${SKILLFLAG_HELP_TEXT}\n`);
+});
+
+test("--skill install delegates to installer with exported tar input", async (t) => {
+  const repo = await makeTempDir("skillflag-install-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed alpha to/);
+
+  const installedPath = path.join(repo.dir, ".codex/skills/alpha/SKILL.md");
+  const installedContent = await fs.readFile(installedPath, "utf8");
+  assert.match(installedContent, /name: alpha/);
+});
+
+test("--skill install without id picks the only available skill", async (t) => {
+  const repo = await makeTempDir("skillflag-install-only-repo-");
+  const skillsRoot = await makeTempDir("skillflag-install-only-skills-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skillsRoot.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skillsRoot.dir,
+    "only-skill/SKILL.md",
+    "---\nname: only-skill\ndescription: Only skill\n---\n",
+  );
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: skillsRoot.dir,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed only-skill to/);
+
+  const installedPath = path.join(
+    repo.dir,
+    ".codex/skills/only-skill/SKILL.md",
+  );
+  const installedContent = await fs.readFile(installedPath, "utf8");
+  assert.match(installedContent, /name: only-skill/);
 });
