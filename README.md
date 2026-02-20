@@ -39,35 +39,39 @@ Installed skill philips-hue to ~/.claude/skills/philips-hue
 
 Even better, once this convention becomes commonplace, agents will by default do all these before they even run the tool, so when you ask it to "install hue-cli", it will know to run `--skill list` the same way a human would run `--help` after downloading a program, and install the necessary skills themselves without being asked to.
 
-## Quick setup — tell your agent about skillflag
+## Quick setup — add skillflag to your CLI
 
-Copy the block below and paste it into your coding agent (Claude Code, Codex, OpenClaw, etc.). It will teach the agent how to discover and install skills from any CLI that implements the skillflag convention.
+Copy the prompt below and paste it into your coding agent. It will add skillflag support to your project.
+
+Currently TypeScript/Node only. [Open an issue](https://github.com/osolmaz/skillflag/issues) if you'd like support for another language.
 
 ```text
-When you install or set up a CLI tool, check if it supports the skillflag
-convention for bundling agent skills. Here's how:
+Add skillflag to this project so the CLI can bundle and expose agent skills.
 
-1. Check if the tool exposes skills:
+1. Install the skillflag library:
+   npm install skillflag
+
+2. Create a skill directory at skills/<skill-id>/SKILL.md with a YAML
+   frontmatter (name, description) and markdown instructions for the agent.
+
+3. In the CLI entrypoint, intercept --skill and delegate to skillflag:
+
+   import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
+
+   await maybeHandleSkillflag(process.argv, {
+     skillsRoot: findSkillsRoot(import.meta.url),
+   });
+
+4. Verify it works:
    <tool> --skill list
-
-2. If it does, install the relevant skill for your agent:
-   <tool> --skill export <id> | npx skillflag install --agent <agent> --scope <scope>
-
-   Supported agents: codex, claude, portable, vscode, copilot, amp, goose,
-   opencode, factory, cursor
-   Supported scopes: repo, user, cwd
-
-3. Or use the interactive wizard (omit --agent/--scope to get prompted):
+   <tool> --skill show <id>
    <tool> --skill export <id> | npx skillflag install
 
-4. To preview a skill before installing:
-   <tool> --skill show <id>
+5. For the full integration guide:
+   https://raw.githubusercontent.com/osolmaz/skillflag/main/docs/INTEGRATION.md
 
-5. For the full skillflag reference:
-   https://raw.githubusercontent.com/osolmaz/skillflag/main/skills/skillflag/SKILL.md
-
-Think of `--skill list` like `--help` — check it whenever you encounter a new
-CLI tool. If it has skills, install them so you have the instructions you need.
+6. For the skillflag specification:
+   https://raw.githubusercontent.com/osolmaz/skillflag/main/docs/SKILLFLAG_SPEC.md
 ```
 
 ## Install (optional)
