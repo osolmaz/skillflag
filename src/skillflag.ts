@@ -9,13 +9,15 @@ import {
   defaultSkillsRoot,
   resolveSkillDirFromRoots,
   resolveSkillsRoot,
+  resolveSkillsRoots,
+  type SkillsRootInput,
 } from "./core/paths.js";
 import { showSkill } from "./core/show.js";
 import { collectSkillEntries, createTarStream } from "./core/tar.js";
 import { uniqueValues } from "./utils/collections.js";
 
 export type SkillflagOptions = {
-  skillsRoot: URL | string;
+  skillsRoot: SkillsRootInput | readonly SkillsRootInput[];
   stdin?: NodeJS.ReadableStream;
   stdout?: NodeJS.WritableStream;
   stderr?: NodeJS.WritableStream;
@@ -271,13 +273,13 @@ export async function handleSkillflag(
 
   try {
     const action = parseSkillArgs(argv);
-    const skillsRoot = resolveSkillsRoot(opts.skillsRoot);
     const bundledRoot = resolveSkillsRoot(defaultSkillsRoot());
     const includeBundled = opts.includeBundledSkill !== false;
-    const rootDirs =
-      includeBundled && bundledRoot !== skillsRoot
-        ? [skillsRoot, bundledRoot]
-        : [skillsRoot];
+    const rootDirs = resolveSkillsRoots(
+      includeBundled
+        ? [...resolveSkillsRoots(opts.skillsRoot), bundledRoot]
+        : opts.skillsRoot,
+    );
 
     if (action.kind === "install") {
       return await runInstallAction(

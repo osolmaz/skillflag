@@ -57,8 +57,9 @@ Add skillflag to this project so the CLI can bundle and expose agent skills.
 1. Install the skillflag library:
    npm install skillflag
 
-2. Create a skill directory at skills/<skill-id>/SKILL.md with a YAML
-   frontmatter (name, description) and markdown instructions for the agent.
+2. Create a skill directory at skills/<skill-id>/SKILL.md or
+   .agents/skills/<skill-id>/SKILL.md with a YAML frontmatter
+   (name, description) and markdown instructions for the agent.
 
 3. In the CLI entrypoint, intercept --skill and delegate to skillflag:
 
@@ -130,7 +131,8 @@ In the wizard, select multiple entries with space, then confirm the matrix insta
 ## Add skillflag to your CLI
 
 1. Add the library and ship your skill directory in the package.
-2. Add a `skills/<skill-id>/SKILL.md` in your repo.
+2. Add a `skills/<skill-id>/SKILL.md` or
+   `.agents/skills/<skill-id>/SKILL.md` in your repo.
 3. In your CLI entrypoint, intercept `--skill` and delegate to skillflag.
 
 ```bash

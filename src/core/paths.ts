@@ -6,10 +6,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { SkillflagError } from "./errors.js";
 
+export type SkillsRootInput = URL | string;
+
 export type SkillDir = {
   id: string;
   dir: string;
 };
+
+const PRODUCER_SKILLS_ROOTS = ["skills", path.join(".agents", "skills")];
 
 export function defaultSkillsRoot(): URL {
   const startDir = path.dirname(fileURLToPath(import.meta.url));
@@ -27,17 +31,33 @@ export function defaultSkillsRoot(): URL {
   }
 }
 
-export function resolveSkillsRoot(root: URL | string): string {
+export function resolveSkillsRoot(root: SkillsRootInput): string {
   if (root instanceof URL) {
-    return fileURLToPath(root);
+    return path.resolve(fileURLToPath(root));
   }
   if (root.startsWith("file:")) {
-    return fileURLToPath(new URL(root));
+    return path.resolve(fileURLToPath(new URL(root)));
   }
   return path.resolve(root);
 }
 
-function toPath(input: URL | string): string {
+export function resolveSkillsRoots(
+  roots: SkillsRootInput | readonly SkillsRootInput[],
+): string[] {
+  const inputs = Array.isArray(roots) ? roots : [roots];
+  const seen = new Set<string>();
+  const resolved: string[] = [];
+  for (const input of inputs) {
+    const root = resolveSkillsRoot(input);
+    if (!seen.has(root)) {
+      seen.add(root);
+      resolved.push(root);
+    }
+  }
+  return resolved;
+}
+
+function toPath(input: SkillsRootInput): string {
   if (input instanceof URL) {
     return fileURLToPath(input);
   }
@@ -47,7 +67,18 @@ function toPath(input: URL | string): string {
   return input;
 }
 
-export function findSkillsRoot(start: URL | string): URL {
+function existingProducerRoots(dir: string): URL[] {
+  const roots: URL[] = [];
+  for (const rel of PRODUCER_SKILLS_ROOTS) {
+    const candidate = path.join(dir, rel);
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      roots.push(pathToFileURL(candidate + path.sep));
+    }
+  }
+  return roots;
+}
+
+export function findSkillsRoots(start: SkillsRootInput): URL[] {
   let current = toPath(start);
   try {
     const stat = fs.statSync(current);
@@ -59,18 +90,22 @@ export function findSkillsRoot(start: URL | string): URL {
   }
 
   while (true) {
-    const candidate = path.join(current, "skills");
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-      return pathToFileURL(candidate + path.sep);
+    const roots = existingProducerRoots(current);
+    if (roots.length > 0) {
+      return roots;
     }
     const parent = path.dirname(current);
     if (parent === current) {
       throw new SkillflagError(
-        "Could not find a skills/ directory. Pass skillsRoot explicitly.",
+        "Could not find a skills/ or .agents/skills/ directory. Pass skillsRoot explicitly.",
       );
     }
     current = parent;
   }
+}
+
+export function findSkillsRoot(start: SkillsRootInput): URL {
+  return findSkillsRoots(start)[0] as URL;
 }
 
 export function assertValidSkillId(id: string): void {
