@@ -75,7 +75,7 @@ skill-install --help
 - `--skill export <id>` streams a tar with a single top‑level `<id>/` and `<id>/SKILL.md`.
 - Export output MUST be deterministic: sorted entries, fixed `mtime = 0`, `uid/gid = 0`.
 - All errors go to stderr, exit code `1` on failure.
-- Skills should be bundled under `skills/<id>/SKILL.md`.
+- Skills should be bundled under `skills/<id>/SKILL.md` or `.agents/skills/<id>/SKILL.md`.
 
 ## Adding Skillflag to a Node CLI (library integration)
 
@@ -121,9 +121,19 @@ skills/
     templates/...
 ```
 
+Portable agent-skill layout is also supported:
+
+```
+.agents/
+  skills/
+    my-skill/
+      SKILL.md
+      templates/...
+```
+
 Package distribution:
 
-- Ensure `skills/` is included in `package.json` `files` so it ships with the npm tarball.
+- Ensure `skills/` or `.agents/skills/` is included in `package.json` `files` so it ships with the npm tarball.
 
 ## Installing without global install
 

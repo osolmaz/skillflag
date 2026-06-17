@@ -13,6 +13,7 @@ import {
   maybeHandleSkillflag,
   SKILLFLAG_HELP_TEXT,
   findSkillsRoot,
+  findSkillsRoots,
 } from "../../src/index.js";
 import { collectSkillEntries, createTarStream } from "../../src/core/tar.js";
 import { createCapture } from "../helpers/capture.js";
@@ -134,6 +135,91 @@ test("findSkillsRoot locates repo skills directory", () => {
   const skillsRoot = findSkillsRoot(import.meta.url);
   const rootPath = fileURLToPath(skillsRoot);
   assert.ok(rootPath.endsWith(`${path.sep}skills${path.sep}`));
+});
+
+test("findSkillsRoot locates portable .agents skills directory", async (t) => {
+  const repo = await makeTempDir("skillflag-agents-root-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  await writeFile(
+    repo.dir,
+    ".agents/skills/portable-skill/SKILL.md",
+    "---\nname: portable-skill\ndescription: Portable skill\n---\n",
+  );
+  await writeFile(repo.dir, "dist/cli.js", "");
+
+  const skillsRoot = findSkillsRoot(path.join(repo.dir, "dist/cli.js"));
+  assert.equal(
+    path.resolve(fileURLToPath(skillsRoot)),
+    path.join(repo.dir, ".agents/skills"),
+  );
+});
+
+test("findSkillsRoots returns skills and portable .agents skills", async (t) => {
+  const repo = await makeTempDir("skillflag-multi-root-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  await writeFile(
+    repo.dir,
+    "skills/tool-skill/SKILL.md",
+    "---\nname: tool-skill\ndescription: Tool skill\n---\n",
+  );
+  await writeFile(
+    repo.dir,
+    ".agents/skills/portable-skill/SKILL.md",
+    "---\nname: portable-skill\ndescription: Portable skill\n---\n",
+  );
+  await writeFile(repo.dir, "dist/cli.js", "");
+
+  const roots = findSkillsRoots(path.join(repo.dir, "dist/cli.js")).map((url) =>
+    path.resolve(fileURLToPath(url)),
+  );
+  assert.deepEqual(roots, [
+    path.join(repo.dir, "skills"),
+    path.join(repo.dir, ".agents/skills"),
+  ]);
+});
+
+test("--skill list accepts multiple producer roots", async (t) => {
+  const first = await makeTempDir("skillflag-root-a-");
+  const second = await makeTempDir("skillflag-root-b-");
+  t.after(async () => {
+    await first.cleanup();
+    await second.cleanup();
+  });
+
+  await writeFile(
+    first.dir,
+    "alpha/SKILL.md",
+    "---\nname: alpha\ndescription: Alpha from first root\n---\n",
+  );
+  await writeFile(
+    second.dir,
+    "gamma/SKILL.md",
+    "---\nname: gamma\ndescription: Gamma from second root\n---\n",
+  );
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+  const exitCode = await handleSkillflag(["node", "cli", "--skill", "list"], {
+    skillsRoot: [first.dir, second.dir],
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+    includeBundledSkill: false,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.equal(
+    stdout.text(),
+    ["alpha\tAlpha from first root", "gamma\tGamma from second root", ""].join(
+      "\n",
+    ),
+  );
 });
 
 test("bundled skill is discoverable and exportable", async () => {

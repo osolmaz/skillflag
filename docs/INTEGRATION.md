@@ -13,6 +13,16 @@ skills/
     scripts/
 ```
 
+Portable repo-local agent skills are also supported:
+
+```
+.agents/
+  skills/
+    my-skill/
+      SKILL.md
+      scripts/
+```
+
 Your `SKILL.md` must include frontmatter with `name` and `description` per the spec. Example:
 
 ```markdown
@@ -28,11 +38,11 @@ Usage, scripts, references...
 
 ## 2) Make sure skills are bundled
 
-Ensure the `skills/` directory is included in your published package. For npm:
+Ensure the `skills/` or `.agents/skills/` directory is included in your published package. For npm:
 
 ```json
 {
-  "files": ["dist", "skills", "README.md", "LICENSE"]
+  "files": ["dist", "skills", ".agents/skills", "README.md", "LICENSE"]
 }
 ```
 
@@ -61,7 +71,7 @@ await maybeHandleSkillflag(process.argv, {
 });
 ```
 
-`findSkillsRoot()` walks upward from the given file/dir until it finds a `skills/` directory, so you don't need to hardcode build offsets. If you prefer to be explicit, you can still pass a URL or path directly.
+`findSkillsRoot()` walks upward from the given file/dir until it finds a `skills/` or `.agents/skills/` directory, so you don't need to hardcode build offsets. It prefers `skills/` when both exist. Use `findSkillsRoots()` if you intentionally ship both roots. If you prefer to be explicit, you can still pass a URL, path, or array of roots directly.
 
 ## 4) Try it locally
 

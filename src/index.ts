@@ -7,4 +7,5 @@ export type {
   SkillflagDispatchOptions,
   SkillflagOptions,
 } from "./skillflag.js";
-export { findSkillsRoot } from "./core/paths.js";
+export { findSkillsRoot, findSkillsRoots } from "./core/paths.js";
+export type { SkillsRootInput } from "./core/paths.js";
