@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/skillflag.svg)](https://www.npmjs.com/package/skillflag)
 [![npm downloads](https://img.shields.io/npm/dm/skillflag.svg)](https://www.npmjs.com/package/skillflag)
-[![CI](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml)
+[![CI](https://github.com/dutifuldev/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/dutifuldev/skillflag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/node/v/skillflag.svg)](https://nodejs.org)
 
@@ -49,7 +49,7 @@ Even better, once this convention becomes commonplace, agents will by default do
 
 Copy the prompt below and paste it into your coding agent. It will add skillflag support to your project.
 
-Currently TypeScript/Node only. [Open an issue](https://github.com/osolmaz/skillflag/issues) if you'd like support for another language.
+Currently TypeScript/Node only. [Open an issue](https://github.com/dutifuldev/skillflag/issues) if you'd like support for another language.
 
 ```text
 Add skillflag to this project so the CLI can bundle and expose agent skills.
@@ -75,10 +75,10 @@ Add skillflag to this project so the CLI can bundle and expose agent skills.
    <tool> --skill export <id> | npx skillflag install
 
 5. For the full integration guide:
-   https://raw.githubusercontent.com/osolmaz/skillflag/main/docs/INTEGRATION.md
+   https://raw.githubusercontent.com/dutifuldev/skillflag/main/docs/INTEGRATION.md
 
 6. For the skillflag specification:
-   https://raw.githubusercontent.com/osolmaz/skillflag/main/docs/SKILLFLAG_SPEC.md
+   https://raw.githubusercontent.com/dutifuldev/skillflag/main/docs/SKILLFLAG_SPEC.md
 ```
 
 ## Install (optional)
