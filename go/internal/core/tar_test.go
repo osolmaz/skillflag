@@ -35,6 +35,37 @@ func exportFixture(t *testing.T, id string) []byte {
 	return buf.Bytes()
 }
 
+func assertNormalizedHeader(t *testing.T, header *tar.Header) {
+	t.Helper()
+	if header.Uid != 0 || header.Gid != 0 {
+		t.Errorf("%s: uid/gid = %d/%d, want 0/0", header.Name, header.Uid, header.Gid)
+	}
+	if header.Uname != "" || header.Gname != "" {
+		t.Errorf("%s: uname/gname = %q/%q, want empty", header.Name, header.Uname, header.Gname)
+	}
+	if header.ModTime.Unix() != 0 {
+		t.Errorf("%s: mtime = %v, want epoch 0", header.Name, header.ModTime)
+	}
+	if strings.HasSuffix(header.Name, "/") && header.Typeflag != tar.TypeDir {
+		t.Errorf("%s: typeflag = %q, want directory", header.Name, header.Typeflag)
+	}
+}
+
+func assertMatchesDiskFile(t *testing.T, reader io.Reader, diskPath string) {
+	t.Helper()
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk, err := os.ReadFile(diskPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(content, disk) {
+		t.Errorf("%s content does not match disk", diskPath)
+	}
+}
+
 func TestExportAlphaStructure(t *testing.T) {
 	data := exportFixture(t, "alpha")
 
@@ -54,31 +85,9 @@ func TestExportAlphaStructure(t *testing.T) {
 			t.Fatal(err)
 		}
 		names = append(names, header.Name)
-
-		if header.Uid != 0 || header.Gid != 0 {
-			t.Errorf("%s: uid/gid = %d/%d, want 0/0", header.Name, header.Uid, header.Gid)
-		}
-		if header.Uname != "" || header.Gname != "" {
-			t.Errorf("%s: uname/gname = %q/%q, want empty", header.Name, header.Uname, header.Gname)
-		}
-		if header.ModTime.Unix() != 0 {
-			t.Errorf("%s: mtime = %v, want epoch 0", header.Name, header.ModTime)
-		}
-		if strings.HasSuffix(header.Name, "/") && header.Typeflag != tar.TypeDir {
-			t.Errorf("%s: typeflag = %q, want directory", header.Name, header.Typeflag)
-		}
+		assertNormalizedHeader(t, header)
 		if header.Name == "alpha/SKILL.md" {
-			content, readErr := io.ReadAll(reader)
-			if readErr != nil {
-				t.Fatal(readErr)
-			}
-			disk, diskErr := os.ReadFile(filepath.Join(fixturesRoot(t), "alpha", "SKILL.md"))
-			if diskErr != nil {
-				t.Fatal(diskErr)
-			}
-			if !bytes.Equal(content, disk) {
-				t.Error("SKILL.md content does not match disk")
-			}
+			assertMatchesDiskFile(t, reader, filepath.Join(fixturesRoot(t), "alpha", "SKILL.md"))
 		}
 	}
 

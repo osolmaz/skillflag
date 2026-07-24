@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,7 +29,7 @@ var Scopes = []string{"repo", "user", "cwd"}
 // ResolveRepoRoot returns `git rev-parse --show-toplevel` run in cwd, falling
 // back to cwd itself outside a git worktree.
 func ResolveRepoRoot(cwd string) string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel")
 	cmd.Dir = cwd
 	out, err := cmd.Output()
 	if err == nil {

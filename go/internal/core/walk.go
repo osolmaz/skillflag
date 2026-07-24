@@ -34,88 +34,108 @@ func isInvalidExportRelPath(relPosix string) bool {
 	return false
 }
 
-// CollectSkillEntries walks a skill directory and returns its tar entries
-// sorted byte-wise by entry name, plus the number of regular files.
-func CollectSkillEntries(skillFS fs.FS, id string, normalizeModes bool) ([]TarEntry, int, error) {
-	var dirRels []string
-	var files []TarEntry
+// skillWalker accumulates the directory and file entries of one skill.
+type skillWalker struct {
+	skillFS        fs.FS
+	id             string
+	normalizeModes bool
+	dirRels        []string
+	files          []TarEntry
+}
 
-	var walk func(rel string) error
-	walk = func(rel string) error {
-		dirRels = append(dirRels, rel)
-		dirPath := "."
+func (w *skillWalker) walkDir(rel string) error {
+	w.dirRels = append(w.dirRels, rel)
+	dirPath := "."
+	if rel != "" {
+		dirPath = rel
+	}
+	dirents, err := fs.ReadDir(w.skillFS, dirPath)
+	if err != nil {
+		return err
+	}
+
+	for _, dirent := range dirents {
+		relChild := dirent.Name()
 		if rel != "" {
-			dirPath = rel
+			relChild = rel + "/" + relChild
 		}
-		dirents, err := fs.ReadDir(skillFS, dirPath)
-		if err != nil {
+		if isInvalidExportRelPath(relChild) {
+			return fmt.Errorf("Invalid path in skill: %s/%s", w.id, relChild)
+		}
+		if err := w.visitDirent(dirent, relChild); err != nil {
 			return err
 		}
-
-		for _, dirent := range dirents {
-			name := dirent.Name()
-			relChild := name
-			if rel != "" {
-				relChild = rel + "/" + name
-			}
-
-			if isInvalidExportRelPath(relChild) {
-				return fmt.Errorf("Invalid path in skill: %s/%s", id, relChild)
-			}
-
-			switch {
-			case dirent.IsDir():
-				if err := walk(relChild); err != nil {
-					return err
-				}
-			case dirent.Type().IsRegular():
-				info, infoErr := dirent.Info()
-				if infoErr != nil {
-					return infoErr
-				}
-				mode := int64(info.Mode().Perm())
-				if normalizeModes {
-					mode = 0o644
-				}
-				files = append(files, TarEntry{
-					Name: id + "/" + relChild,
-					Mode: mode,
-					Size: info.Size(),
-					Rel:  relChild,
-				})
-			case dirent.Type()&fs.ModeSymlink != 0:
-				return fmt.Errorf("Symlinks are not supported in skill bundles: %s/%s", id, relChild)
-			default:
-				return fmt.Errorf("Unsupported file type in skill bundle: %s/%s", id, relChild)
-			}
-		}
-		return nil
 	}
+	return nil
+}
 
-	if err := walk(""); err != nil {
-		return nil, 0, err
+func (w *skillWalker) visitDirent(dirent fs.DirEntry, relChild string) error {
+	switch {
+	case dirent.IsDir():
+		return w.walkDir(relChild)
+	case dirent.Type().IsRegular():
+		return w.addFile(dirent, relChild)
+	case dirent.Type()&fs.ModeSymlink != 0:
+		return fmt.Errorf("Symlinks are not supported in skill bundles: %s/%s", w.id, relChild)
+	default:
+		return fmt.Errorf("Unsupported file type in skill bundle: %s/%s", w.id, relChild)
 	}
+}
 
-	entries := make([]TarEntry, 0, len(dirRels)+len(files))
-	for _, rel := range dirRels {
+func (w *skillWalker) addFile(dirent fs.DirEntry, relChild string) error {
+	info, err := dirent.Info()
+	if err != nil {
+		return err
+	}
+	mode := int64(info.Mode().Perm())
+	if w.normalizeModes {
+		mode = 0o644
+	}
+	w.files = append(w.files, TarEntry{
+		Name: w.id + "/" + relChild,
+		Mode: mode,
+		Size: info.Size(),
+		Rel:  relChild,
+	})
+	return nil
+}
+
+func (w *skillWalker) dirEntries() ([]TarEntry, error) {
+	entries := make([]TarEntry, 0, len(w.dirRels))
+	for _, rel := range w.dirRels {
 		statPath := "."
-		name := id + "/"
+		name := w.id + "/"
 		if rel != "" {
 			statPath = rel
-			name = id + "/" + rel + "/"
+			name = w.id + "/" + rel + "/"
 		}
 		mode := int64(0o755)
-		if !normalizeModes {
-			info, err := fs.Stat(skillFS, statPath)
+		if !w.normalizeModes {
+			info, err := fs.Stat(w.skillFS, statPath)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 			mode = int64(info.Mode().Perm())
 		}
 		entries = append(entries, TarEntry{Name: name, IsDir: true, Mode: mode, Rel: statPath})
 	}
-	entries = append(entries, files...)
+	return entries, nil
+}
+
+// CollectSkillEntries walks a skill directory and returns its tar entries
+// sorted byte-wise by entry name, plus the number of regular files.
+func CollectSkillEntries(skillFS fs.FS, id string, normalizeModes bool) ([]TarEntry, int, error) {
+	walker := &skillWalker{skillFS: skillFS, id: id, normalizeModes: normalizeModes}
+	if err := walker.walkDir(""); err != nil {
+		return nil, 0, err
+	}
+
+	entries, err := walker.dirEntries()
+	if err != nil {
+		return nil, 0, err
+	}
+	entries = append(entries, walker.files...)
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	return entries, len(files), nil
+	return entries, len(walker.files), nil
 }

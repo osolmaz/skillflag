@@ -1,3 +1,6 @@
+// Package install implements the skill-install companion CLI: validating
+// skill bundles (directories or tar streams), mapping agent/scope pairs to
+// destination directories, and copying skills into place.
 package install
 
 import (
@@ -71,32 +74,27 @@ var usageText = strings.Join([]string{
 	"  Use the wizard to select multiple agents/scopes.",
 }, "\n")
 
-func parseAgentValue(value string, ok bool) (string, error) {
-	if !ok || value == "" || strings.HasPrefix(value, "-") {
-		return "", errors.New("Missing value for --agent.")
-	}
-	agent := strings.TrimSpace(value)
-	if agent == "" {
-		return "", errors.New("Missing value for --agent.")
-	}
-	if strings.Contains(agent, ",") {
-		return "", errors.New("Only one value is allowed for --agent. Comma-separated values are not supported.")
-	}
-	return agent, nil
+// fprintf writes prompt/status text. Write errors are deliberately ignored:
+// this output goes to stderr (or an interactive terminal) and a failing
+// stream must not change the CLI's behavior, matching the reference
+// implementation.
+func fprintf(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
-func parseScopeValue(value string, ok bool) (string, error) {
-	if !ok || value == "" || strings.HasPrefix(value, "-") {
-		return "", errors.New("Missing value for --scope.")
+// parseSingleFlagValue validates the value following --agent/--scope.
+func parseSingleFlagValue(flag string, args []string, index int) (string, error) {
+	if index >= len(args) || args[index] == "" || strings.HasPrefix(args[index], "-") {
+		return "", fmt.Errorf("Missing value for %s.", flag)
 	}
-	scope := strings.TrimSpace(value)
-	if scope == "" {
-		return "", errors.New("Missing value for --scope.")
+	value := strings.TrimSpace(args[index])
+	if value == "" {
+		return "", fmt.Errorf("Missing value for %s.", flag)
 	}
-	if strings.Contains(scope, ",") {
-		return "", errors.New("Only one value is allowed for --scope. Comma-separated values are not supported.")
+	if strings.Contains(value, ",") {
+		return "", fmt.Errorf("Only one value is allowed for %s. Comma-separated values are not supported.", flag)
 	}
-	return scope, nil
+	return value, nil
 }
 
 func parseArgs(args []string) (parsedArgs, error) {
@@ -104,33 +102,19 @@ func parseArgs(args []string) (parsedArgs, error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
-		case arg == "--agent":
-			if parsed.agent != "" {
-				return parsedArgs{}, errors.New("Only one --agent flag is allowed.")
+		case arg == "--agent" || arg == "--scope":
+			target := &parsed.agent
+			if arg == "--scope" {
+				target = &parsed.scope
 			}
-			next, ok := "", false
-			if i+1 < len(args) {
-				next, ok = args[i+1], true
+			if *target != "" {
+				return parsedArgs{}, fmt.Errorf("Only one %s flag is allowed.", arg)
 			}
-			agent, err := parseAgentValue(next, ok)
+			value, err := parseSingleFlagValue(arg, args, i+1)
 			if err != nil {
 				return parsedArgs{}, err
 			}
-			parsed.agent = agent
-			i++
-		case arg == "--scope":
-			if parsed.scope != "" {
-				return parsedArgs{}, errors.New("Only one --scope flag is allowed.")
-			}
-			next, ok := "", false
-			if i+1 < len(args) {
-				next, ok = args[i+1], true
-			}
-			scope, err := parseScopeValue(next, ok)
-			if err != nil {
-				return parsedArgs{}, err
-			}
-			parsed.scope = scope
+			*target = value
 			i++
 		case arg == "--force":
 			parsed.force = true
@@ -189,6 +173,50 @@ func prepareDirSource(inputPath string, cwd string) (preparedSource, error) {
 	}, nil
 }
 
+func sourcesFromPaths(inputPaths []string, cwd string) ([]preparedSource, error) {
+	sources := make([]preparedSource, 0, len(inputPaths))
+	for _, inputPath := range inputPaths {
+		source, err := prepareDirSource(inputPath, cwd)
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, source)
+	}
+	return sources, nil
+}
+
+func sourcesFromProvided(provided []Input, providedIDs []string, cwd string) ([]preparedSource, error) {
+	sources := make([]preparedSource, 0, len(provided))
+	for i, input := range provided {
+		if input.Dir != "" {
+			source, err := prepareDirSource(input.Dir, cwd)
+			if err != nil {
+				return nil, err
+			}
+			sources = append(sources, source)
+			continue
+		}
+		hint := "<from skill bundle>"
+		if i < len(providedIDs) && providedIDs[i] != "" {
+			hint = providedIDs[i]
+		}
+		sources = append(sources, preparedSource{source: "tar stream", hint: hint, input: input})
+	}
+	return sources, nil
+}
+
+func sourceFromStdin(stdin io.Reader) ([]preparedSource, error) {
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return nil, err
+	}
+	return []preparedSource{{
+		source: "tar stream",
+		hint:   "<from skill bundle>",
+		input:  Input{Tar: data},
+	}}, nil
+}
+
 func resolveInstallSources(
 	inputPaths []string,
 	stdin io.Reader,
@@ -197,55 +225,18 @@ func resolveInstallSources(
 	providedIDs []string,
 	cwd string,
 ) ([]preparedSource, error) {
-	if len(inputPaths) > 0 && len(provided) > 0 {
+	switch {
+	case len(inputPaths) > 0 && len(provided) > 0:
 		return nil, errors.New("PATH cannot be used when install input is preset.")
+	case len(inputPaths) > 0:
+		return sourcesFromPaths(inputPaths, cwd)
+	case len(provided) > 0:
+		return sourcesFromProvided(provided, providedIDs, cwd)
+	case !tty:
+		return sourceFromStdin(stdin)
+	default:
+		return nil, fmt.Errorf("Missing PATH or tar stream on stdin.\n%s", usageText)
 	}
-
-	if len(inputPaths) > 0 {
-		sources := make([]preparedSource, 0, len(inputPaths))
-		for _, inputPath := range inputPaths {
-			source, err := prepareDirSource(inputPath, cwd)
-			if err != nil {
-				return nil, err
-			}
-			sources = append(sources, source)
-		}
-		return sources, nil
-	}
-
-	if len(provided) > 0 {
-		sources := make([]preparedSource, 0, len(provided))
-		for i, input := range provided {
-			if input.Dir != "" {
-				source, err := prepareDirSource(input.Dir, cwd)
-				if err != nil {
-					return nil, err
-				}
-				sources = append(sources, source)
-				continue
-			}
-			hint := "<from skill bundle>"
-			if i < len(providedIDs) && providedIDs[i] != "" {
-				hint = providedIDs[i]
-			}
-			sources = append(sources, preparedSource{source: "tar stream", hint: hint, input: input})
-		}
-		return sources, nil
-	}
-
-	if !tty {
-		data, err := io.ReadAll(stdin)
-		if err != nil {
-			return nil, err
-		}
-		return []preparedSource{{
-			source: "tar stream",
-			hint:   "<from skill bundle>",
-			input:  Input{Tar: data},
-		}}, nil
-	}
-
-	return nil, fmt.Errorf("Missing PATH or tar stream on stdin.\n%s", usageText)
 }
 
 func buildInstallPlan(sources []preparedSource, agent string, scope string, cwd string) ([]planItem, error) {
@@ -306,12 +297,22 @@ func readPromptLine(reader *bufio.Reader) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-func promptAgent(reader *bufio.Reader, stderr io.Writer) (string, error) {
-	fmt.Fprintln(stderr, "Select an agent:")
-	for i, agent := range Agents {
-		fmt.Fprintf(stderr, "  %d. %s\n", i+1, agent)
+// promptChoice prints a numbered option list to stderr and reads a selection
+// (a number or a literal option value) from the interactive stdin.
+func promptChoice(
+	reader *bufio.Reader,
+	stderr io.Writer,
+	header string,
+	prompt string,
+	options []string,
+	assert func(string) (string, error),
+) (string, error) {
+	fprintf(stderr, "%s\n", header)
+	for i, option := range options {
+		fprintf(stderr, "  %d. %s\n", i+1, option)
 	}
-	fmt.Fprint(stderr, "Agent (number or name): ")
+	fprintf(stderr, "%s", prompt)
+
 	selection, err := readPromptLine(reader)
 	if err != nil {
 		return "", err
@@ -320,12 +321,20 @@ func promptAgent(reader *bufio.Reader, stderr io.Writer) (string, error) {
 		return "", errors.New("Install cancelled.")
 	}
 	if n, convErr := strconv.Atoi(selection); convErr == nil {
-		if n < 1 || n > len(Agents) {
+		if n < 1 || n > len(options) {
 			return "", fmt.Errorf("Invalid selection: %s", selection)
 		}
-		return Agents[n-1], nil
+		return options[n-1], nil
 	}
-	return AssertAgent(selection)
+	return assert(selection)
+}
+
+func promptAgent(reader *bufio.Reader, stderr io.Writer) (string, error) {
+	return promptChoice(
+		reader, stderr,
+		"Select an agent:", "Agent (number or name): ",
+		Agents, AssertAgent,
+	)
 }
 
 func promptScope(reader *bufio.Reader, stderr io.Writer, agent string) (string, error) {
@@ -333,25 +342,82 @@ func promptScope(reader *bufio.Reader, stderr io.Writer, agent string) (string, 
 	if len(scopes) == 1 {
 		return scopes[0], nil
 	}
-	fmt.Fprintf(stderr, "Select a scope for %s:\n", agent)
-	for i, scope := range scopes {
-		fmt.Fprintf(stderr, "  %d. %s\n", i+1, scope)
+	return promptChoice(
+		reader, stderr,
+		fmt.Sprintf("Select a scope for %s:", agent), "Scope (number or name): ",
+		scopes, AssertScope,
+	)
+}
+
+func validateProvidedInputs(opts CLIOptions, parsed parsedArgs) error {
+	if len(opts.ProvidedSkillIDs) > 0 && len(opts.ProvidedInputs) == 0 {
+		return errors.New("Preset skill ids require preset install inputs.")
 	}
-	fmt.Fprint(stderr, "Scope (number or name): ")
-	selection, err := readPromptLine(reader)
-	if err != nil {
-		return "", err
+	if len(opts.ProvidedSkillIDs) > 0 && len(opts.ProvidedSkillIDs) != len(opts.ProvidedInputs) {
+		return errors.New("Preset skill id count must match preset install input count.")
 	}
-	if selection == "" {
-		return "", errors.New("Install cancelled.")
+	if len(opts.ProvidedInputs) > 0 && len(parsed.inputPaths) > 0 {
+		return errors.New("PATH cannot be used when install input is preset.")
 	}
-	if n, convErr := strconv.Atoi(selection); convErr == nil {
-		if n < 1 || n > len(scopes) {
-			return "", fmt.Errorf("Invalid selection: %s", selection)
+	return nil
+}
+
+// resolveAgentScope fills in missing --agent/--scope values, prompting on an
+// interactive TTY and failing otherwise.
+func resolveAgentScope(parsed parsedArgs, stdin io.Reader, stderr io.Writer, tty bool) (string, string, error) {
+	agent := parsed.agent
+	scope := parsed.scope
+	if agent == "" || scope == "" {
+		if !tty {
+			return "", "", fmt.Errorf("Missing required flags.\n%s", usageText)
 		}
-		return scopes[n-1], nil
+		reader := bufio.NewReader(stdin)
+		var err error
+		if agent == "" {
+			agent, err = promptAgent(reader, stderr)
+		} else {
+			agent, err = AssertAgent(agent)
+		}
+		if err != nil {
+			return "", "", err
+		}
+		if scope == "" {
+			scope, err = promptScope(reader, stderr, agent)
+			if err != nil {
+				return "", "", err
+			}
+		}
 	}
-	return AssertScope(selection)
+
+	agent, err := AssertAgent(agent)
+	if err != nil {
+		return "", "", err
+	}
+	scope, err = AssertScope(scope)
+	if err != nil {
+		return "", "", err
+	}
+	if err := AssertSupportedAgentScopes([]string{agent}, []string{scope}); err != nil {
+		return "", "", err
+	}
+	return agent, scope, nil
+}
+
+func executePlan(plan []planItem, cwd string, force bool, stderr io.Writer) error {
+	for _, item := range plan {
+		result, err := InstallSkill(item.source.input, InstallOptions{
+			Agent: item.agent,
+			Scope: item.scope,
+			Cwd:   cwd,
+			Force: force,
+		})
+		if err != nil {
+			return err
+		}
+		fprintf(stderr, "Installed %s to %s (%s/%s)\n",
+			result.SkillID, result.InstalledTo, item.agent, item.scope)
+	}
+	return nil
 }
 
 // RunCLI runs the skill-install command line. args are the arguments after
@@ -383,7 +449,7 @@ func RunCLI(args []string, opts CLIOptions) int {
 		if !tty {
 			drainStdin(stdin)
 		}
-		fmt.Fprintf(stderr, "%s\n", err)
+		fprintf(stderr, "%s\n", err)
 		return 1
 	}
 	return code
@@ -403,53 +469,19 @@ func runCLI(
 		return 0, err
 	}
 	if parsed.help {
-		fmt.Fprintf(stdout, "%s\n", usageText)
+		fprintf(stdout, "%s\n", usageText)
 		if !tty {
 			drainStdin(stdin)
 		}
 		return 0, nil
 	}
 
-	if len(opts.ProvidedSkillIDs) > 0 && len(opts.ProvidedInputs) == 0 {
-		return 0, errors.New("Preset skill ids require preset install inputs.")
-	}
-	if len(opts.ProvidedSkillIDs) > 0 && len(opts.ProvidedSkillIDs) != len(opts.ProvidedInputs) {
-		return 0, errors.New("Preset skill id count must match preset install input count.")
-	}
-	if len(opts.ProvidedInputs) > 0 && len(parsed.inputPaths) > 0 {
-		return 0, errors.New("PATH cannot be used when install input is preset.")
-	}
-
-	agent := parsed.agent
-	scope := parsed.scope
-	if agent == "" || scope == "" {
-		if !tty {
-			return 0, fmt.Errorf("Missing required flags.\n%s", usageText)
-		}
-		reader := bufio.NewReader(stdin)
-		if agent == "" {
-			agent, err = promptAgent(reader, stderr)
-			if err != nil {
-				return 0, err
-			}
-		} else if agent, err = AssertAgent(agent); err != nil {
-			return 0, err
-		}
-		if scope == "" {
-			scope, err = promptScope(reader, stderr, agent)
-			if err != nil {
-				return 0, err
-			}
-		}
-	}
-
-	if agent, err = AssertAgent(agent); err != nil {
+	if err := validateProvidedInputs(opts, parsed); err != nil {
 		return 0, err
 	}
-	if scope, err = AssertScope(scope); err != nil {
-		return 0, err
-	}
-	if err := AssertSupportedAgentScopes([]string{agent}, []string{scope}); err != nil {
+
+	agent, scope, err := resolveAgentScope(parsed, stdin, stderr, tty)
+	if err != nil {
 		return 0, err
 	}
 
@@ -468,18 +500,8 @@ func runCLI(
 		return 0, err
 	}
 
-	for _, item := range plan {
-		result, installErr := InstallSkill(item.source.input, InstallOptions{
-			Agent: item.agent,
-			Scope: item.scope,
-			Cwd:   cwd,
-			Force: parsed.force,
-		})
-		if installErr != nil {
-			return 0, installErr
-		}
-		fmt.Fprintf(stderr, "Installed %s to %s (%s/%s)\n",
-			result.SkillID, result.InstalledTo, item.agent, item.scope)
+	if err := executePlan(plan, cwd, parsed.force, stderr); err != nil {
+		return 0, err
 	}
 	return 0, nil
 }

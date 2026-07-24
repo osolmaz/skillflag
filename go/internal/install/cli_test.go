@@ -211,46 +211,40 @@ func TestInstallSkillIDComesFromFrontmatterName(t *testing.T) {
 	}
 }
 
+func writeRawFile(t *testing.T, path string, content string) string {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestInstallValidationErrors(t *testing.T) {
 	repo := initGitRepo(t)
 
-	emptyDir := t.TempDir()
-	res := runCLITest([]string{emptyDir, "--agent", "codex", "--scope", "repo"}, CLIOptions{Cwd: repo})
-	if res.code != 1 || res.stderr.String() != "SKILL.md not found in skill root.\n" {
-		t.Fatalf("stderr = %q", res.stderr.String())
-	}
-
 	noName := t.TempDir()
-	if err := os.WriteFile(filepath.Join(noName, "SKILL.md"), []byte("---\ndescription: d\n---\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	res = runCLITest([]string{noName, "--agent", "codex", "--scope", "repo"}, CLIOptions{Cwd: repo})
-	if res.code != 1 || res.stderr.String() != "SKILL.md metadata is missing name.\n" {
-		t.Fatalf("stderr = %q", res.stderr.String())
-	}
-
+	writeRawFile(t, filepath.Join(noName, "SKILL.md"), "---\ndescription: d\n---\n")
 	noDescription := t.TempDir()
-	if err := os.WriteFile(filepath.Join(noDescription, "SKILL.md"), []byte("---\nname: n\n---\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	res = runCLITest([]string{noDescription, "--agent", "codex", "--scope", "repo"}, CLIOptions{Cwd: repo})
-	if res.code != 1 || res.stderr.String() != "SKILL.md metadata is missing description.\n" {
-		t.Fatalf("stderr = %q", res.stderr.String())
-	}
-
+	writeRawFile(t, filepath.Join(noDescription, "SKILL.md"), "---\nname: n\n---\n")
 	missing := filepath.Join(t.TempDir(), "nope")
-	res = runCLITest([]string{missing, "--agent", "codex", "--scope", "repo"}, CLIOptions{Cwd: repo})
-	if res.code != 1 || res.stderr.String() != "PATH does not exist: "+missing+"\n" {
-		t.Fatalf("stderr = %q", res.stderr.String())
-	}
+	filePath := writeRawFile(t, filepath.Join(t.TempDir(), "file.txt"), "x")
 
-	filePath := filepath.Join(t.TempDir(), "file.txt")
-	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"missing SKILL.md", t.TempDir(), "SKILL.md not found in skill root."},
+		{"missing name", noName, "SKILL.md metadata is missing name."},
+		{"missing description", noDescription, "SKILL.md metadata is missing description."},
+		{"missing path", missing, "PATH does not exist: " + missing},
+		{"path is a file", filePath, "PATH must be a directory containing SKILL.md."},
 	}
-	res = runCLITest([]string{filePath, "--agent", "codex", "--scope", "repo"}, CLIOptions{Cwd: repo})
-	if res.code != 1 || res.stderr.String() != "PATH must be a directory containing SKILL.md.\n" {
-		t.Fatalf("stderr = %q", res.stderr.String())
+	for _, tc := range cases {
+		res := runCLITest([]string{tc.path, "--agent", "codex", "--scope", "repo"}, CLIOptions{Cwd: repo})
+		if res.code != 1 || res.stderr.String() != tc.want+"\n" {
+			t.Errorf("%s: code=%d stderr=%q, want %q", tc.name, res.code, res.stderr.String(), tc.want+"\n")
+		}
 	}
 }
 

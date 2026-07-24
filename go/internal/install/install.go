@@ -38,7 +38,9 @@ func InstallSkill(input Input, options InstallOptions) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		defer os.RemoveAll(tempDir)
+		// Best-effort temp dir cleanup; a failure must not mask the
+		// install result.
+		defer func() { _ = os.RemoveAll(tempDir) }()
 		rootDir, err = ExtractSkillTarToTemp(bytes.NewReader(input.Tar), tempDir)
 		if err != nil {
 			return Result{}, err

@@ -3,6 +3,7 @@ package skillflag
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -55,7 +56,7 @@ func initGitRepo(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "init", "-q")
+	cmd := exec.CommandContext(context.Background(), "git", "init", "-q")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
@@ -141,13 +142,20 @@ func TestListIgnoresUnrelatedArgs(t *testing.T) {
 	}
 }
 
-func TestListJSONFormatAndDigest(t *testing.T) {
-	res := runHandle([]string{"cli", "--skill", "list", "--json"}, fixtureOpts(t))
-	if res.code != 0 || res.stderr.Len() != 0 {
-		t.Fatalf("code=%d stderr=%q", res.code, res.stderr.String())
-	}
-	out := res.stdout.String()
+type listJSONSkill struct {
+	ID      string `json:"id"`
+	Digest  string `json:"digest"`
+	Files   *int   `json:"files"`
+	Summary string `json:"summary"`
+}
 
+type listJSONPayload struct {
+	SkillflagVersion string          `json:"skillflag_version"`
+	Skills           []listJSONSkill `json:"skills"`
+}
+
+func assertCompactListJSON(t *testing.T, out string) {
+	t.Helper()
 	if strings.HasSuffix(out, "\n") {
 		t.Fatal("JSON output must not end with a newline")
 	}
@@ -157,19 +165,10 @@ func TestListJSONFormatAndDigest(t *testing.T) {
 	if strings.Contains(out, ": ") || strings.Contains(out, ", ") {
 		t.Fatalf("JSON must be compact: %q", out)
 	}
+}
 
-	var payload struct {
-		SkillflagVersion string `json:"skillflag_version"`
-		Skills           []struct {
-			ID      string `json:"id"`
-			Digest  string `json:"digest"`
-			Files   *int   `json:"files"`
-			Summary string `json:"summary"`
-		} `json:"skills"`
-	}
-	if err := json.Unmarshal([]byte(out), &payload); err != nil {
-		t.Fatal(err)
-	}
+func assertAlphaListItem(t *testing.T, payload listJSONPayload) listJSONSkill {
+	t.Helper()
 	if payload.SkillflagVersion != "0.1" || len(payload.Skills) != 2 {
 		t.Fatalf("payload = %+v", payload)
 	}
@@ -177,6 +176,22 @@ func TestListJSONFormatAndDigest(t *testing.T) {
 	if alpha.ID != "alpha" || alpha.Summary != "Alpha test skill" || alpha.Files == nil || *alpha.Files != 2 {
 		t.Fatalf("alpha = %+v", alpha)
 	}
+	return alpha
+}
+
+func TestListJSONFormatAndDigest(t *testing.T) {
+	res := runHandle([]string{"cli", "--skill", "list", "--json"}, fixtureOpts(t))
+	if res.code != 0 || res.stderr.Len() != 0 {
+		t.Fatalf("code=%d stderr=%q", res.code, res.stderr.String())
+	}
+	out := res.stdout.String()
+	assertCompactListJSON(t, out)
+
+	var payload listJSONPayload
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	alpha := assertAlphaListItem(t, payload)
 
 	export := runHandle([]string{"cli", "--skill", "export", "alpha"}, fixtureOpts(t))
 	if export.code != 0 {

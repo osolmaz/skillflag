@@ -10,8 +10,10 @@ check-typescript:
 	cd typescript && npm test
 
 # GOWORK=off: a user-level go.work above the repo must not affect the build.
+# golangci-lint runs when installed locally; CI always runs it (pinned).
 check-go:
 	cd go && test -z "$$(gofmt -l .)"
+	cd go && if command -v golangci-lint >/dev/null; then GOWORK=off GOFLAGS=-buildvcs=false golangci-lint run ./...; else echo "golangci-lint not installed; skipping (CI runs it)"; fi
 	cd go && GOWORK=off go vet ./...
 	cd go && GOWORK=off go test ./...
 	cd go && GOWORK=off go build -o /dev/null ./cmd/skillflag-go && GOWORK=off go build -o /dev/null ./cmd/skill-install-go

@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +15,7 @@ func initGitRepo(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "init", "-q")
+	cmd := exec.CommandContext(context.Background(), "git", "init", "-q")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
@@ -76,8 +77,8 @@ func TestResolveSkillsRootDefaults(t *testing.T) {
 	// Register cleanup via t.Setenv, then unset to exercise the fallbacks.
 	t.Setenv("CODEX_HOME", "x")
 	t.Setenv("XDG_CONFIG_HOME", "x")
-	os.Unsetenv("CODEX_HOME")
-	os.Unsetenv("XDG_CONFIG_HOME")
+	_ = os.Unsetenv("CODEX_HOME")
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 
 	got, err := ResolveSkillsRoot("codex", "user", home)
 	if err != nil {

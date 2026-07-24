@@ -48,6 +48,12 @@ jobs:
         with:
           go-version-file: go/go.mod
       - run: test -z "$(gofmt -l .)"
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11.0
+          working-directory: go
+          args: ./...
       - run: go vet ./...
       - run: go test ./...
       - run: go build -o /dev/null ./cmd/skillflag-go

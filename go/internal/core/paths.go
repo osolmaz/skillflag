@@ -1,3 +1,6 @@
+// Package core implements the producer side of the Skillflag convention:
+// skills-root discovery, skill listing, frontmatter parsing, the
+// deterministic tar export (docs/DETERMINISTIC_TAR.md), and digests.
 package core
 
 import (

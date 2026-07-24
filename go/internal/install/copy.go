@@ -42,37 +42,42 @@ func copyTree(src string, dst string) error {
 		return err
 	}
 	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-		switch {
-		case entry.IsDir():
-			if err := copyTree(srcPath, dstPath); err != nil {
-				return err
-			}
-		case entry.Type()&os.ModeSymlink != 0:
-			target, linkErr := os.Readlink(srcPath)
-			if linkErr != nil {
-				return linkErr
-			}
-			if err := os.Symlink(target, dstPath); err != nil {
-				return err
-			}
-		default:
-			info, infoErr := entry.Info()
-			if infoErr != nil {
-				return infoErr
-			}
-			data, readErr := os.ReadFile(srcPath)
-			if readErr != nil {
-				return readErr
-			}
-			if err := os.WriteFile(dstPath, data, info.Mode().Perm()); err != nil {
-				return err
-			}
-			if err := os.Chmod(dstPath, info.Mode().Perm()); err != nil {
-				return err
-			}
+		if err := copyEntry(entry, filepath.Join(src, entry.Name()), filepath.Join(dst, entry.Name())); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func copyEntry(entry os.DirEntry, srcPath string, dstPath string) error {
+	switch {
+	case entry.IsDir():
+		return copyTree(srcPath, dstPath)
+	case entry.Type()&os.ModeSymlink != 0:
+		target, err := os.Readlink(srcPath)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(target, dstPath)
+	default:
+		return copyFilePreservingMode(entry, srcPath, dstPath)
+	}
+}
+
+func copyFilePreservingMode(entry os.DirEntry, srcPath string, dstPath string) error {
+	info, err := entry.Info()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return err
+	}
+	// #nosec G703 -- dstPath is built from the resolved install destination
+	// plus directory entry names of a validated source tree; tar input has
+	// already been checked against traversal and absolute paths.
+	if err := os.WriteFile(dstPath, data, info.Mode().Perm()); err != nil {
+		return err
+	}
+	return os.Chmod(dstPath, info.Mode().Perm())
 }

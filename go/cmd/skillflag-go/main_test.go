@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -83,7 +84,7 @@ func TestInstallRoutesPathInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "init", "-q")
+	cmd := exec.CommandContext(context.Background(), "git", "init", "-q")
 	cmd.Dir = repo
 	if out, gitErr := cmd.CombinedOutput(); gitErr != nil {
 		t.Fatalf("git init: %v: %s", gitErr, out)

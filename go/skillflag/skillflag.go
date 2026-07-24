@@ -148,49 +148,58 @@ func parseInstallIDs(values []string) ([]string, []string) {
 	return uniqueStrings(ids), values[index:]
 }
 
-// parseSkillArgs parses the action from argv. argv[0] is the program name
-// (os.Args style); if a `--skill` token is present the action starts right
-// after it, otherwise argv[1] is the action (standalone binary form).
-func parseSkillArgs(argv []string) (skillAction, error) {
+// resolveActionArgs trims argv down to the action arguments. argv[0] is the
+// program name (os.Args style); if a `--skill` token is present the action
+// starts right after it, otherwise argv[1] is the action (standalone binary
+// form).
+func resolveActionArgs(argv []string) []string {
 	cliArgs := argv
 	if len(argv) > 0 {
 		cliArgs = argv[1:]
 	}
-	args := cliArgs
 	for i, arg := range cliArgs {
 		if arg == "--skill" {
-			args = cliArgs[i+1:]
-			break
+			return cliArgs[i+1:]
 		}
 	}
+	return cliArgs
+}
 
+func parseListAction(rest []string) skillAction {
+	for _, arg := range rest {
+		if arg == "--json" {
+			return skillAction{kind: "list", json: true}
+		}
+	}
+	return skillAction{kind: "list"}
+}
+
+func parseIDAction(kind string, rest []string) (skillAction, error) {
+	if len(rest) == 0 || rest[0] == "" || strings.HasPrefix(rest[0], "-") {
+		return skillAction{}, fmt.Errorf("Missing skill id.\n%s", usageText)
+	}
+	return skillAction{kind: kind, id: rest[0]}, nil
+}
+
+func parseSkillArgs(argv []string) (skillAction, error) {
+	args := resolveActionArgs(argv)
 	if len(args) == 0 || args[0] == "" || strings.HasPrefix(args[0], "-") {
 		return skillAction{}, fmt.Errorf("Missing --skill action.\n%s", usageText)
 	}
-	action := args[0]
 
-	switch action {
+	switch action := args[0]; action {
 	case "install":
 		ids, installArgs := parseInstallIDs(args[1:])
 		return skillAction{kind: "install", ids: ids, installArgs: installArgs}, nil
 	case "list":
-		json := false
-		for _, arg := range args[1:] {
-			if arg == "--json" {
-				json = true
-			}
-		}
-		return skillAction{kind: "list", json: json}, nil
+		return parseListAction(args[1:]), nil
 	case "help":
 		return skillAction{kind: "help"}, nil
 	case "export", "show":
-		if len(args) < 2 || args[1] == "" || strings.HasPrefix(args[1], "-") {
-			return skillAction{}, fmt.Errorf("Missing skill id.\n%s", usageText)
-		}
-		return skillAction{kind: action, id: args[1]}, nil
+		return parseIDAction(action, args[1:])
+	default:
+		return skillAction{}, fmt.Errorf("Unknown --skill action: %s.\n%s", action, usageText)
 	}
-
-	return skillAction{}, fmt.Errorf("Unknown --skill action: %s.\n%s", action, usageText)
 }
 
 func resolveRoots(opts Options) []core.Root {
@@ -238,52 +247,66 @@ func stdinIsTTY(stdin io.Reader, override *bool) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-func promptSkillIDs(skills []core.SkillInfo, stdin io.Reader, stderr io.Writer) ([]string, error) {
-	fmt.Fprintln(stderr, "Select skills to install:")
-	for i, skill := range skills {
-		if skill.Summary != "" {
-			fmt.Fprintf(stderr, "  %d. %s\t%s\n", i+1, skill.ID, skill.Summary)
-		} else {
-			fmt.Fprintf(stderr, "  %d. %s\n", i+1, skill.ID)
+// fprintf writes prompt text. Write errors are deliberately ignored: this
+// output goes to stderr for an interactive user, and a failing stream must
+// not change behavior, matching the reference implementation.
+func fprintf(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+// skillIDForToken resolves one selection token (a 1-based number or a
+// literal skill id) against the listed skills.
+func skillIDForToken(token string, skills []core.SkillInfo) (string, error) {
+	if n, err := strconv.Atoi(token); err == nil {
+		if n < 1 || n > len(skills) {
+			return "", fmt.Errorf("Invalid selection: %s", token)
+		}
+		return skills[n-1].ID, nil
+	}
+	for _, skill := range skills {
+		if skill.ID == token {
+			return token, nil
 		}
 	}
-	fmt.Fprint(stderr, "Skills (comma-separated numbers or ids): ")
+	return "", fmt.Errorf("Invalid selection: %s", token)
+}
 
-	reader := bufio.NewReader(stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && line == "" {
-		return nil, errors.New("Install cancelled.")
-	}
-
+func parseSkillSelection(line string, skills []core.SkillInfo) ([]string, error) {
 	var ids []string
 	for _, token := range strings.Split(strings.TrimSpace(line), ",") {
 		token = strings.TrimSpace(token)
 		if token == "" {
 			continue
 		}
-		if n, convErr := strconv.Atoi(token); convErr == nil {
-			if n < 1 || n > len(skills) {
-				return nil, fmt.Errorf("Invalid selection: %s", token)
-			}
-			ids = append(ids, skills[n-1].ID)
-			continue
+		id, err := skillIDForToken(token, skills)
+		if err != nil {
+			return nil, err
 		}
-		found := false
-		for _, skill := range skills {
-			if skill.ID == token {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("Invalid selection: %s", token)
-		}
-		ids = append(ids, token)
+		ids = append(ids, id)
 	}
 	if len(ids) == 0 {
 		return nil, errors.New("Install cancelled.")
 	}
 	return uniqueStrings(ids), nil
+}
+
+func promptSkillIDs(skills []core.SkillInfo, stdin io.Reader, stderr io.Writer) ([]string, error) {
+	fprintf(stderr, "Select skills to install:\n")
+	for i, skill := range skills {
+		if skill.Summary != "" {
+			fprintf(stderr, "  %d. %s\t%s\n", i+1, skill.ID, skill.Summary)
+		} else {
+			fprintf(stderr, "  %d. %s\n", i+1, skill.ID)
+		}
+	}
+	fprintf(stderr, "Skills (comma-separated numbers or ids): ")
+
+	reader := bufio.NewReader(stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && line == "" {
+		return nil, errors.New("Install cancelled.")
+	}
+	return parseSkillSelection(line, skills)
 }
 
 func resolveInstallSkillIDs(
@@ -369,10 +392,58 @@ func Handle(argv []string, opts Options) int {
 
 	code, err := handle(argv, opts, stdin, stdout, stderr)
 	if err != nil {
-		fmt.Fprintf(stderr, "%s\n", err)
+		// The error message itself is the CLI output; a failing stderr
+		// cannot be reported anywhere else.
+		fprintf(stderr, "%s\n", err)
 		return 1
 	}
 	return code
+}
+
+func runListJSONAction(roots []core.Root, stdout io.Writer) error {
+	payload, err := core.ListSkillsJSON(roots)
+	if err != nil {
+		return err
+	}
+	data, err := core.MarshalListJSON(payload)
+	if err != nil {
+		return err
+	}
+	_, err = stdout.Write(data)
+	return err
+}
+
+func runListTextAction(roots []core.Root, stdout io.Writer) error {
+	skills := core.ListSkills(roots)
+	if len(skills) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		if skill.Summary != "" {
+			lines = append(lines, skill.ID+"\t"+skill.Summary)
+		} else {
+			lines = append(lines, skill.ID)
+		}
+	}
+	_, err := io.WriteString(stdout, strings.Join(lines, "\n")+"\n")
+	return err
+}
+
+func runExportAction(roots []core.Root, id string, stdout io.Writer) error {
+	skillFS, normalize, err := core.ResolveSkillFS(roots, id)
+	if err != nil {
+		return err
+	}
+	return core.ExportSkill(skillFS, id, normalize, stdout)
+}
+
+func runShowAction(roots []core.Root, id string, stdout io.Writer) error {
+	skillFS, _, err := core.ResolveSkillFS(roots, id)
+	if err != nil {
+		return err
+	}
+	return core.ShowSkill(skillFS, stdout)
 }
 
 func handle(
@@ -391,55 +462,18 @@ func handle(
 	switch action.kind {
 	case "install":
 		return runInstallAction(action, roots, opts, stdin, stdout, stderr)
-
 	case "list":
 		if action.json {
-			payload, listErr := core.ListSkillsJSON(roots)
-			if listErr != nil {
-				return 0, listErr
-			}
-			data, marshalErr := core.MarshalListJSON(payload)
-			if marshalErr != nil {
-				return 0, marshalErr
-			}
-			if _, writeErr := stdout.Write(data); writeErr != nil {
-				return 0, writeErr
-			}
-			return 0, nil
+			return 0, runListJSONAction(roots, stdout)
 		}
-		skills := core.ListSkills(roots)
-		if len(skills) > 0 {
-			lines := make([]string, 0, len(skills))
-			for _, skill := range skills {
-				if skill.Summary != "" {
-					lines = append(lines, skill.ID+"\t"+skill.Summary)
-				} else {
-					lines = append(lines, skill.ID)
-				}
-			}
-			if _, writeErr := io.WriteString(stdout, strings.Join(lines, "\n")+"\n"); writeErr != nil {
-				return 0, writeErr
-			}
-		}
-		return 0, nil
-
+		return 0, runListTextAction(roots, stdout)
 	case "export":
-		skillFS, normalize, resolveErr := core.ResolveSkillFS(roots, action.id)
-		if resolveErr != nil {
-			return 0, resolveErr
-		}
-		return 0, core.ExportSkill(skillFS, action.id, normalize, stdout)
-
+		return 0, runExportAction(roots, action.id, stdout)
 	case "help":
 		_, writeErr := io.WriteString(stdout, HelpText+"\n")
 		return 0, writeErr
-
 	default: // "show"
-		skillFS, _, resolveErr := core.ResolveSkillFS(roots, action.id)
-		if resolveErr != nil {
-			return 0, resolveErr
-		}
-		return 0, core.ShowSkill(skillFS, stdout)
+		return 0, runShowAction(roots, action.id, stdout)
 	}
 }
 
