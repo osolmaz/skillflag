@@ -6,13 +6,13 @@
   "author": "Onur Solmaz <info@solmaz.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dutifuldev/skillflag.git",
+    "url": "git+https://github.com/osolmaz/skillflag.git",
     "directory": "typescript"
   },
   "bugs": {
-    "url": "https://github.com/dutifuldev/skillflag/issues"
+    "url": "https://github.com/osolmaz/skillflag/issues"
   },
-  "homepage": "https://github.com/dutifuldev/skillflag#readme",
+  "homepage": "https://github.com/osolmaz/skillflag#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
