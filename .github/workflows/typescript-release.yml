@@ -1,4 +1,3 @@
-# npm trusted publishing identifies this workflow by its exact filename.
 name: TypeScript Release
 
 on:
