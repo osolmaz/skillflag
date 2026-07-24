@@ -759,6 +759,19 @@ test("skillflag binary routes install PATH to the installer CLI", async (t) => {
   );
 });
 
+test("skillflag binary honors SKILLFLAG_SKILLS_ROOT and drops the bundled skill", () => {
+  const result = spawnSync(process.execPath, [skillflagBinaryPath, "list"], {
+    encoding: "utf8",
+    env: { ...process.env, SKILLFLAG_SKILLS_ROOT: fixturesRoot },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout,
+    "alpha\tAlpha test skill\nbeta\tBeta test skill\n",
+  );
+});
+
 test("skillflag binary routes piped tar install to the installer CLI", async (t) => {
   const repo = await makeTempDir("skillflag-bin-tar-repo-");
   const skill = await makeTempDir("skillflag-bin-tar-skill-");

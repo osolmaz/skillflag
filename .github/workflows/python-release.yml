@@ -1,0 +1,41 @@
+name: Python Release
+
+on:
+  push:
+    tags:
+      - "python/v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - name: Validate tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "$TAG" | grep -Eq '^python/v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Tag $TAG does not match python/vX.Y.Z"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "Tagged commit is not on main"; exit 1; }
+          VERSION=$(uvx --from toml-cli toml get --toml-path python/pyproject.toml project.version)
+          [ "python/v$VERSION" = "$TAG" ] || { echo "Tag $TAG does not match pyproject version $VERSION"; exit 1; }
+      - name: Gate
+        working-directory: python
+        run: |
+          uv sync
+          uv run ruff format --check .
+          uv run ruff check .
+          uv run pytest
+      - name: Build and publish to PyPI
+        working-directory: python
+        run: |
+          uv build
+          uv publish --trusted-publishing always
+      - name: Create GitHub release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
