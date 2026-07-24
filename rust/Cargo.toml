@@ -1,0 +1,12 @@
+[workspace]
+members = ["crates/skillflag"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/osolmaz/skillflag"
+version = "0.1.0"
+
+[workspace.dependencies]
+sha2 = "0.10"
