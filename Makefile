@@ -9,11 +9,12 @@ check-typescript:
 	cd typescript && npm run lint
 	cd typescript && npm test
 
+# GOWORK=off: a user-level go.work above the repo must not affect the build.
 check-go:
 	cd go && test -z "$$(gofmt -l .)"
-	cd go && go vet ./...
-	cd go && go test ./...
-	cd go && go build ./cmd/skillflag-go ./cmd/skill-install-go
+	cd go && GOWORK=off go vet ./...
+	cd go && GOWORK=off go test ./...
+	cd go && GOWORK=off go build -o /dev/null ./cmd/skillflag-go && GOWORK=off go build -o /dev/null ./cmd/skill-install-go
 
 check-python:
 	cd python && uv sync

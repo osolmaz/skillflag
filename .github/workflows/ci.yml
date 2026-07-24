@@ -50,7 +50,8 @@ jobs:
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...
-      - run: go build ./cmd/skillflag-go ./cmd/skill-install-go
+      - run: go build -o /dev/null ./cmd/skillflag-go
+      - run: go build -o /dev/null ./cmd/skill-install-go
 
   python:
     runs-on: ubuntu-latest

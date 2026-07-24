@@ -41,7 +41,12 @@ function pass(message) {
 
 function build(name, cmd, args, cwd) {
   log(`building ${name}...`);
-  execFileSync(cmd, args, { cwd, stdio: ["ignore", "inherit", "inherit"] });
+  execFileSync(cmd, args, {
+    cwd,
+    stdio: ["ignore", "inherit", "inherit"],
+    // A user-level go.work above the repo must not affect the Go build.
+    env: { ...process.env, GOWORK: "off" },
+  });
 }
 
 function defineImplementations() {
