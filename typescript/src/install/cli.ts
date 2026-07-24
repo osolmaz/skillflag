@@ -32,7 +32,7 @@ import {
   type Scope,
 } from "./resolve.js";
 import { assertSkillDir, readSkillMetadata } from "./validate.js";
-import { uniqueValues } from "../utils/collections.js";
+import { compareStrings, uniqueValues } from "../utils/collections.js";
 
 export type InstallCliOptions = {
   stdin?: Readable;
@@ -585,7 +585,7 @@ function assertNoInstallCollisions(plan: InstallPlanItem[]): void {
 
   const collisions = [...plansByDestination.entries()]
     .filter(([, items]) => items.length > 1)
-    .sort(([a], [b]) => a.localeCompare(b));
+    .sort(([a], [b]) => compareStrings(a, b));
 
   if (collisions.length === 0) {
     return;

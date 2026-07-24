@@ -5,6 +5,7 @@ import { collectSkillEntries, createTarStream } from "./tar.js";
 import { digestStreamSha256 } from "./digest.js";
 import { listSkillDirs } from "./paths.js";
 import { parseFrontmatter } from "../shared/frontmatter.js";
+import { compareStrings } from "../utils/collections.js";
 
 export type SkillListJsonItem = {
   id: string;
@@ -62,7 +63,7 @@ export async function listSkills(rootDirs: string[]): Promise<SkillInfo[]> {
     infos.push(await readSkillInfo(dir, id));
   }
 
-  infos.sort((a, b) => a.id.localeCompare(b.id));
+  infos.sort((a, b) => compareStrings(a.id, b.id));
   return infos;
 }
 

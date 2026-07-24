@@ -5,6 +5,7 @@ import * as tar from "tar-stream";
 import { Readable } from "node:stream";
 
 import { SkillflagError } from "./errors.js";
+import { compareStrings } from "../utils/collections.js";
 
 const FIXED_MTIME = new Date(0);
 
@@ -102,7 +103,7 @@ export async function collectSkillEntries(
   }
 
   const entries = [...dirEntries, ...files].sort((a, b) =>
-    a.name.localeCompare(b.name),
+    compareStrings(a.name, b.name),
   );
 
   return { entries, fileCount: files.length };

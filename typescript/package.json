@@ -6,7 +6,8 @@
   "author": "Onur Solmaz <info@solmaz.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dutifuldev/skillflag.git"
+    "url": "git+https://github.com/dutifuldev/skillflag.git",
+    "directory": "typescript"
   },
   "bugs": {
     "url": "https://github.com/dutifuldev/skillflag/issues"
@@ -32,7 +33,7 @@
     "format:check": "prettier --check . --ignore-unknown",
     "lint": "eslint . --max-warnings 0",
     "prepack": "npm run build",
-    "prepare": "husky",
+    "prepare": "cd .. && husky typescript/.husky",
     "release": "release-it",
     "release:ci": "release-it --ci",
     "test": "npm run -s build:test && node --test dist-test/test/integration/*.test.js"

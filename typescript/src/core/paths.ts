@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { SkillflagError } from "./errors.js";
+import { compareStrings } from "../utils/collections.js";
 
 export type SkillsRootInput = URL | string;
 
@@ -145,7 +146,7 @@ export async function listSkillDirs(rootDir: string): Promise<SkillDir[]> {
     }
   }
 
-  skills.sort((a, b) => a.id.localeCompare(b.id));
+  skills.sort((a, b) => compareStrings(a.id, b.id));
   return skills;
 }
 

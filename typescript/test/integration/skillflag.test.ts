@@ -19,7 +19,7 @@ import { collectSkillEntries, createTarStream } from "../../src/core/tar.js";
 import { createCapture } from "../helpers/capture.js";
 import { makeTempDir, writeFile } from "../helpers/tmp.js";
 
-const fixturesRoot = path.resolve(process.cwd(), "test/fixtures/skills");
+const fixturesRoot = path.resolve(process.cwd(), "../fixtures/skills");
 const bundledSkillsRoot = path.resolve(process.cwd(), "skills");
 const skillflagBinaryPath = path.resolve(
   process.cwd(),
