@@ -1,6 +1,6 @@
 ---
 title: Skillflag Specification
-author: Onur Solmaz <2453968+osolmaz@users.noreply.github.com>
+author: Onur Solmaz (GitHub: osolmaz)
 date: 2026-01-11
 ---
 
@@ -589,7 +589,7 @@ If a tool isn’t listed, `skill-install` must support:
 This keeps the spec future-proof without baking in every new agent.
 
 [1]: https://developers.openai.com/codex/skills/ "Agent Skills"
-[2]: https://block.github.io/goose/docs/guides/context-engineering/using-skills/ "Using Skills | goose"
+[2]: https://goose-docs.ai/docs/guides/context-engineering/using-skills/ "Agent Skills | goose"
 [3]: https://code.claude.com/docs/en/skills "Agent Skills - Claude Code Docs"
 [4]: https://docs.github.com/copilot/concepts/agents/about-agent-skills "About Agent Skills - GitHub Docs"
 [5]: https://ampcode.com/news/agent-skills "Agent Skills - Amp"

@@ -50,6 +50,59 @@ Ensure the `skills/` or `.agents/skills/` directory is included in your publishe
 
 If you publish via a different mechanism, just make sure the skill directory ships alongside your built CLI output.
 
+### OpenClaw plugin packages
+
+OpenClaw plugins can already declare packaged skills in `openclaw.plugin.json`.
+If your plugin also exposes a user-facing CLI, Skillflag can export the same
+skills to Codex, Claude, Goose, and other agents without adding agent-specific
+install paths to the plugin itself.
+
+Using `@xquik/tweetclaw` as an example, keep the skill folder in the published
+package and declare it in the plugin manifest:
+
+```json
+{
+  "name": "@xquik/tweetclaw",
+  "files": ["dist/", "skills/tweetclaw/", "openclaw.plugin.json"]
+}
+```
+
+```json
+{
+  "id": "tweetclaw",
+  "skills": ["skills/tweetclaw"]
+}
+```
+
+For a CLI-enabled plugin, point the CLI entrypoint at the package's `skills/`
+directory:
+
+```ts
+import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
+
+await maybeHandleSkillflag(process.argv, {
+  includeBundledSkill: false,
+  skillsRoot: findSkillsRoot(import.meta.url),
+});
+```
+
+This keeps OpenClaw installation native:
+
+```bash
+openclaw plugins install npm:@xquik/tweetclaw
+```
+
+After the package wires that entrypoint to a `tweetclaw` bin, users also get a
+portable skill export path for non-OpenClaw agents:
+
+```bash
+tweetclaw --skill list
+tweetclaw --skill export tweetclaw | npx skillflag install --agent codex
+```
+
+Xquik is an independent third-party service. Not affiliated with X Corp.
+"Twitter" and "X" are trademarks of X Corp.
+
 ## 3) Wire `--skill` early in your CLI
 
 Intercept `--skill` before your regular CLI parsing so Skillflag can take over. Example (ESM):
