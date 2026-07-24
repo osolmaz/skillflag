@@ -47,55 +47,57 @@ function build(name, cmd, args, cwd) {
 function defineImplementations() {
   const impls = [];
 
-  const tsDir = path.join(repoRoot, "typescript");
-  if (fs.existsSync(tsDir)) {
-    if (!fs.existsSync(path.join(tsDir, "node_modules"))) {
-      build("typescript deps", "npm", ["ci"], tsDir);
+  const define = (name, dir, buildSteps, make) => {
+    if (!fs.existsSync(path.join(repoRoot, dir))) return;
+    try {
+      for (const [label, cmd, args, cwd] of buildSteps) build(label, cmd, args, cwd);
+      impls.push({ name, ...make() });
+    } catch (err) {
+      fail(`build failed for ${name}: ${err.message}`);
     }
-    build("typescript", "npm", ["run", "-s", "build"], tsDir);
-    impls.push({
-      name: "typescript",
-      producer: ["node", path.join(tsDir, "dist", "bin", "skillflag.js")],
-      installer: ["node", path.join(tsDir, "dist", "bin", "skill-install.js")],
-    });
+  };
+
+  const tsDir = path.join(repoRoot, "typescript");
+  const tsBuildSteps = [["typescript", "npm", ["run", "-s", "build"], tsDir]];
+  if (!fs.existsSync(path.join(tsDir, "node_modules"))) {
+    tsBuildSteps.unshift(["typescript deps", "npm", ["ci"], tsDir]);
   }
+  define("typescript", "typescript", tsBuildSteps, () => ({
+    producer: ["node", path.join(tsDir, "dist", "bin", "skillflag.js")],
+    installer: ["node", path.join(tsDir, "dist", "bin", "skill-install.js")],
+  }));
 
   const goDir = path.join(repoRoot, "go");
-  if (fs.existsSync(goDir)) {
-    build(
-      "go",
-      "go",
-      ["build", "-o", buildDir + path.sep, "./cmd/skillflag-go", "./cmd/skill-install-go"],
-      goDir,
-    );
-    impls.push({
-      name: "go",
+  define(
+    "go",
+    "go",
+    [
+      [
+        "go",
+        "go",
+        ["build", "-o", buildDir + path.sep, "./cmd/skillflag-go", "./cmd/skill-install-go"],
+        goDir,
+      ],
+    ],
+    () => ({
       producer: [path.join(buildDir, "skillflag-go")],
       installer: [path.join(buildDir, "skill-install-go")],
-    });
-  }
+    }),
+  );
 
   const pyDir = path.join(repoRoot, "python");
-  if (fs.existsSync(pyDir)) {
-    build("python", "uv", ["sync", "--quiet"], pyDir);
-    const venvBin = path.join(pyDir, ".venv", "bin");
-    impls.push({
-      name: "python",
-      producer: [path.join(venvBin, "skillflag-py")],
-      installer: [path.join(venvBin, "skill-install-py")],
-    });
-  }
+  const venvBin = path.join(pyDir, ".venv", "bin");
+  define("python", "python", [["python", "uv", ["sync", "--quiet"], pyDir]], () => ({
+    producer: [path.join(venvBin, "skillflag-py")],
+    installer: [path.join(venvBin, "skill-install-py")],
+  }));
 
   const rustDir = path.join(repoRoot, "rust");
-  if (fs.existsSync(rustDir)) {
-    build("rust", "cargo", ["build", "--quiet", "--workspace"], rustDir);
-    const target = path.join(rustDir, "target", "debug");
-    impls.push({
-      name: "rust",
-      producer: [path.join(target, "skillflag-rs")],
-      installer: [path.join(target, "skill-install-rs")],
-    });
-  }
+  const rustTarget = path.join(rustDir, "target", "debug");
+  define("rust", "rust", [["rust", "cargo", ["build", "--quiet", "--workspace"], rustDir]], () => ({
+    producer: [path.join(rustTarget, "skillflag-rs")],
+    installer: [path.join(rustTarget, "skill-install-rs")],
+  }));
 
   return impls;
 }
@@ -146,7 +148,8 @@ function makeTempGitRepo() {
 
 const impls = defineImplementations();
 const missing = ["typescript", "go", "python", "rust"].filter(
-  (name) => !impls.some((impl) => impl.name === name),
+  (name) =>
+    !impls.some((impl) => impl.name === name) && !fs.existsSync(path.join(repoRoot, name)),
 );
 for (const name of missing) {
   if (requireAll) fail(`implementation missing: ${name}`);
