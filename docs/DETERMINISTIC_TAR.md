@@ -20,8 +20,10 @@ commit to the exact layout below.
 - Directory entry names end with `/`: the root is `<id>/`, nested directories
   are `<id>/<rel>/`. File entries are `<id>/<rel>` with forward slashes.
 - Sort all entries (directories and files together) by entry name using
-  **byte-wise lexicographic comparison** of the name including any trailing
-  `/`. Do not use locale-aware collation.
+  **lexicographic comparison of the UTF-8 encoded bytes** of the name
+  including any trailing `/`. Do not use locale-aware collation, and do not
+  compare UTF-16 code units (they disagree with UTF-8 byte order for
+  supplementary-plane characters).
 - Reject absolute paths and any path containing a `..` segment.
 
 ## Header block (512 bytes, POSIX ustar)
