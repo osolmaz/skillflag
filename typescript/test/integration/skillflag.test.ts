@@ -1,0 +1,809 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { execFileSync, spawnSync } from "node:child_process";
+import { Readable } from "node:stream";
+import * as tar from "tar-stream";
+import { fileURLToPath } from "node:url";
+
+import {
+  handleSkillflag,
+  maybeHandleSkillflag,
+  SKILLFLAG_HELP_TEXT,
+  findSkillsRoot,
+  findSkillsRoots,
+} from "../../src/index.js";
+import { collectSkillEntries, createTarStream } from "../../src/core/tar.js";
+import { createCapture } from "../helpers/capture.js";
+import { makeTempDir, writeFile } from "../helpers/tmp.js";
+
+const fixturesRoot = path.resolve(process.cwd(), "../fixtures/skills");
+const bundledSkillsRoot = path.resolve(process.cwd(), "skills");
+const skillflagBinaryPath = path.resolve(
+  process.cwd(),
+  "dist-test/src/bin/skillflag.js",
+);
+const PROMPT_CANCEL = Symbol("prompt-cancel");
+
+function initGit(repoDir: string): void {
+  execFileSync("git", ["init"], { cwd: repoDir });
+}
+
+function sha256(buffer: Buffer): string {
+  const hash = createHash("sha256");
+  hash.update(buffer);
+  return `sha256:${hash.digest("hex")}`;
+}
+
+async function bufferFromStream(
+  stream: NodeJS.ReadableStream,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
+function createTtyStdin(): Readable {
+  const stdin = Readable.from([]);
+  (stdin as Readable & { isTTY?: boolean }).isTTY = true;
+  return stdin;
+}
+
+async function collectTarEntries(buffer: Buffer): Promise<string[]> {
+  const extract = tar.extract();
+  const entries: string[] = [];
+
+  return new Promise((resolve, reject) => {
+    extract.on("entry", (header, stream, next) => {
+      entries.push(header.name);
+      stream.resume();
+      stream.on("end", next);
+    });
+
+    extract.on("finish", () => resolve(entries));
+    extract.on("error", reject);
+
+    extract.end(buffer);
+  });
+}
+
+type TarHeader = {
+  name: string;
+  type: string | null | undefined;
+  mtime: Date | undefined;
+  uid: number | undefined;
+  gid: number | undefined;
+  uname: string | undefined;
+  gname: string | undefined;
+};
+
+async function collectTarHeaders(buffer: Buffer): Promise<TarHeader[]> {
+  const extract = tar.extract();
+  const headers: TarHeader[] = [];
+
+  return new Promise((resolve, reject) => {
+    extract.on("entry", (header, stream, next) => {
+      headers.push({
+        name: header.name,
+        type: header.type,
+        mtime: header.mtime instanceof Date ? header.mtime : undefined,
+        uid: header.uid,
+        gid: header.gid,
+        uname: header.uname,
+        gname: header.gname,
+      });
+      stream.resume();
+      stream.on("end", next);
+    });
+
+    extract.on("finish", () => resolve(headers));
+    extract.on("error", reject);
+
+    extract.end(buffer);
+  });
+}
+
+test("--skill list outputs sorted ids", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(["node", "cli", "--skill", "list"], {
+    skillsRoot: fixturesRoot,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.equal(
+    stdout.text(),
+    [
+      "alpha\tAlpha test skill",
+      "beta\tBeta test skill",
+      "skillflag\tSkillflag producer/installer usage and install guidance (requires skill-install).",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("findSkillsRoot locates repo skills directory", () => {
+  const skillsRoot = findSkillsRoot(import.meta.url);
+  const rootPath = fileURLToPath(skillsRoot);
+  assert.ok(rootPath.endsWith(`${path.sep}skills${path.sep}`));
+});
+
+test("findSkillsRoot locates portable .agents skills directory", async (t) => {
+  const repo = await makeTempDir("skillflag-agents-root-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  await writeFile(
+    repo.dir,
+    ".agents/skills/portable-skill/SKILL.md",
+    "---\nname: portable-skill\ndescription: Portable skill\n---\n",
+  );
+  await writeFile(repo.dir, "dist/cli.js", "");
+
+  const skillsRoot = findSkillsRoot(path.join(repo.dir, "dist/cli.js"));
+  assert.equal(
+    path.resolve(fileURLToPath(skillsRoot)),
+    path.join(repo.dir, ".agents/skills"),
+  );
+});
+
+test("findSkillsRoots returns skills and portable .agents skills", async (t) => {
+  const repo = await makeTempDir("skillflag-multi-root-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  await writeFile(
+    repo.dir,
+    "skills/tool-skill/SKILL.md",
+    "---\nname: tool-skill\ndescription: Tool skill\n---\n",
+  );
+  await writeFile(
+    repo.dir,
+    ".agents/skills/portable-skill/SKILL.md",
+    "---\nname: portable-skill\ndescription: Portable skill\n---\n",
+  );
+  await writeFile(repo.dir, "dist/cli.js", "");
+
+  const roots = findSkillsRoots(path.join(repo.dir, "dist/cli.js")).map((url) =>
+    path.resolve(fileURLToPath(url)),
+  );
+  assert.deepEqual(roots, [
+    path.join(repo.dir, "skills"),
+    path.join(repo.dir, ".agents/skills"),
+  ]);
+});
+
+test("--skill list accepts multiple producer roots", async (t) => {
+  const first = await makeTempDir("skillflag-root-a-");
+  const second = await makeTempDir("skillflag-root-b-");
+  t.after(async () => {
+    await first.cleanup();
+    await second.cleanup();
+  });
+
+  await writeFile(
+    first.dir,
+    "alpha/SKILL.md",
+    "---\nname: alpha\ndescription: Alpha from first root\n---\n",
+  );
+  await writeFile(
+    second.dir,
+    "gamma/SKILL.md",
+    "---\nname: gamma\ndescription: Gamma from second root\n---\n",
+  );
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+  const exitCode = await handleSkillflag(["node", "cli", "--skill", "list"], {
+    skillsRoot: [first.dir, second.dir],
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+    includeBundledSkill: false,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.equal(
+    stdout.text(),
+    ["alpha\tAlpha from first root", "gamma\tGamma from second root", ""].join(
+      "\n",
+    ),
+  );
+});
+
+test("bundled skill is discoverable and exportable", async () => {
+  await fs.access(path.join(bundledSkillsRoot, "skillflag/SKILL.md"));
+
+  const listStdout = createCapture();
+  const listStderr = createCapture();
+
+  const listExit = await handleSkillflag(["node", "cli", "--skill", "list"], {
+    skillsRoot: bundledSkillsRoot,
+    stdout: listStdout.stream,
+    stderr: listStderr.stream,
+  });
+
+  assert.equal(listExit, 0);
+  assert.equal(listStderr.text(), "");
+  const ids = listStdout
+    .text()
+    .trim()
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => line.split("\t")[0]);
+  assert.ok(ids.includes("skillflag"));
+
+  const exportStdout = createCapture();
+  const exportStderr = createCapture();
+  const exportExit = await handleSkillflag(
+    ["node", "cli", "--skill", "export", "skillflag"],
+    {
+      skillsRoot: bundledSkillsRoot,
+      stdout: exportStdout.stream,
+      stderr: exportStderr.stream,
+    },
+  );
+
+  assert.equal(exportExit, 0);
+  assert.equal(exportStderr.text(), "");
+  const entries = await collectTarEntries(exportStdout.buffer());
+  assert.ok(entries.includes("skillflag/SKILL.md"));
+});
+
+test("--skill list --json matches export digest", async () => {
+  const listStdout = createCapture();
+  const listStderr = createCapture();
+
+  const listExit = await handleSkillflag(
+    ["node", "cli", "--skill", "list", "--json"],
+    {
+      skillsRoot: fixturesRoot,
+      stdout: listStdout.stream,
+      stderr: listStderr.stream,
+    },
+  );
+
+  assert.equal(listExit, 0);
+  assert.equal(listStderr.text(), "");
+
+  const payload = JSON.parse(listStdout.text()) as {
+    skillflag_version: string;
+    skills: Array<{ id: string; digest: string; summary?: string }>;
+  };
+
+  assert.equal(payload.skillflag_version, "0.1");
+  assert.ok(payload.skills.length >= 2);
+
+  const alpha = payload.skills.find((skill) => skill.id === "alpha");
+  assert.ok(alpha?.digest.startsWith("sha256:"));
+  assert.equal(alpha?.summary, "Alpha test skill");
+
+  const exportStdout = createCapture();
+  const exportStderr = createCapture();
+  const exportExit = await handleSkillflag(
+    ["node", "cli", "--skill", "export", "alpha"],
+    {
+      skillsRoot: fixturesRoot,
+      stdout: exportStdout.stream,
+      stderr: exportStderr.stream,
+    },
+  );
+
+  assert.equal(exportExit, 0);
+  assert.equal(exportStderr.text(), "");
+
+  const exportDigest = sha256(exportStdout.buffer());
+  assert.equal(alpha?.digest, exportDigest);
+});
+
+test("--skill list ignores unrelated args", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--config",
+      "foo",
+      "--skill",
+      "list",
+      "--json",
+      "--other",
+      "bar",
+    ],
+    { skillsRoot: fixturesRoot, stdout: stdout.stream, stderr: stderr.stream },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  const payload = JSON.parse(stdout.text()) as {
+    skills: Array<{ id: string }>;
+  };
+  assert.ok(payload.skills.length >= 2);
+});
+
+test("maybeHandleSkillflag handles --skill without manual checks", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const handled = await maybeHandleSkillflag(
+    ["node", "cli", "--skill", "list"],
+    {
+      skillsRoot: fixturesRoot,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      exit: false,
+    },
+  );
+
+  assert.equal(handled, true);
+  assert.equal(stderr.text(), "");
+  assert.ok(stdout.text().includes("alpha"));
+});
+
+test("--skill export produces a single top-level dir", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    ["node", "cli", "--skill", "export", "alpha"],
+    { skillsRoot: fixturesRoot, stdout: stdout.stream, stderr: stderr.stream },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+
+  const entries = await collectTarEntries(stdout.buffer());
+  assert.ok(entries.includes("alpha/"));
+  assert.ok(entries.includes("alpha/SKILL.md"));
+  assert.ok(entries.every((name) => name.startsWith("alpha/")));
+});
+
+test("--skill export tar metadata is normalized and ordered", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    ["node", "cli", "--skill", "export", "alpha"],
+    { skillsRoot: fixturesRoot, stdout: stdout.stream, stderr: stderr.stream },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+
+  const headers = await collectTarHeaders(stdout.buffer());
+  assert.ok(headers.length > 0);
+
+  const names = headers.map((h) => h.name);
+  const sorted = [...names].sort((a, b) => a.localeCompare(b));
+  assert.deepEqual(names, sorted);
+
+  for (const header of headers) {
+    assert.equal(header.uid, 0);
+    assert.equal(header.gid, 0);
+    assert.equal(header.uname, "");
+    assert.equal(header.gname, "");
+    assert.ok(header.mtime instanceof Date);
+    assert.equal(header.mtime?.getTime(), 0);
+  }
+});
+
+test("--skill export missing id returns error", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    ["node", "cli", "--skill", "export", "missing"],
+    { skillsRoot: fixturesRoot, stdout: stdout.stream, stderr: stderr.stream },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.text(), "");
+  assert.match(stderr.text(), /Skill not found/);
+});
+
+test("--skill help shows bundled skillflag docs", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(["node", "cli", "--skill", "help"], {
+    skillsRoot: fixturesRoot,
+    stdout: stdout.stream,
+    stderr: stderr.stream,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.equal(stdout.text(), `${SKILLFLAG_HELP_TEXT}\n`);
+});
+
+test("--skill install delegates to installer with exported tar input", async (t) => {
+  const repo = await makeTempDir("skillflag-install-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed alpha to/);
+
+  const installedPath = path.join(repo.dir, ".codex/skills/alpha/SKILL.md");
+  const installedContent = await fs.readFile(installedPath, "utf8");
+  assert.match(installedContent, /name: alpha/);
+});
+
+test("--skill install supports multiple ids with a single scope", async (t) => {
+  const repo = await makeTempDir("skillflag-install-multi-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "beta",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed alpha to/);
+  assert.match(stderr.text(), /Installed beta to/);
+
+  await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
+  await fs.access(path.join(repo.dir, ".codex/skills/beta/SKILL.md"));
+});
+
+test("--skill install rejects repeated --scope flags", async (t) => {
+  const repo = await makeTempDir("skillflag-install-repeat-scope-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+      "--scope",
+      "user",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one --scope flag is allowed/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md")),
+  );
+});
+
+test("--skill install rejects repeated --agent flags", async (t) => {
+  const repo = await makeTempDir("skillflag-install-agents-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "alpha",
+      "--agent",
+      "codex",
+      "--agent",
+      "claude",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /Only one --agent flag is allowed/);
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md")),
+  );
+  await assert.rejects(
+    fs.access(path.join(repo.dir, ".claude/skills/alpha/SKILL.md")),
+  );
+});
+
+test("--skill install without id in non-interactive mode requires explicit ids when multiple skills exist", async () => {
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.text(), /pass one or more ids with --skill install/);
+});
+
+test("--skill install without id picks the only available skill", async (t) => {
+  const repo = await makeTempDir("skillflag-install-only-repo-");
+  const skillsRoot = await makeTempDir("skillflag-install-only-skills-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skillsRoot.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skillsRoot.dir,
+    "only-skill/SKILL.md",
+    "---\nname: only-skill\ndescription: Only skill\n---\n",
+  );
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: skillsRoot.dir,
+      stdin: Readable.from([]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed only-skill to/);
+
+  const installedPath = path.join(
+    repo.dir,
+    ".codex/skills/only-skill/SKILL.md",
+  );
+  const installedContent = await fs.readFile(installedPath, "utf8");
+  assert.match(installedContent, /name: only-skill/);
+});
+
+test("--skill install supports interactive multi-select when multiple skills are available", async (t) => {
+  const repo = await makeTempDir("skillflag-install-select-repo-");
+  t.after(async () => {
+    await repo.cleanup();
+  });
+
+  initGit(repo.dir);
+
+  const stdout = createCapture();
+  const stderr = createCapture();
+
+  const exitCode = await handleSkillflag(
+    [
+      "node",
+      "cli",
+      "--skill",
+      "install",
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      skillsRoot: fixturesRoot,
+      stdin: createTtyStdin(),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      cwd: repo.dir,
+      includeBundledSkill: false,
+      promptApi: {
+        multiselect: async <Value>() => ["alpha", "beta"] as Value[],
+        isCancel: (value): value is symbol => value === PROMPT_CANCEL,
+      },
+    },
+  );
+
+  assert.equal(exitCode, 0);
+  assert.match(stderr.text(), /Installed alpha to/);
+  assert.match(stderr.text(), /Installed beta to/);
+  await fs.access(path.join(repo.dir, ".codex/skills/alpha/SKILL.md"));
+  await fs.access(path.join(repo.dir, ".codex/skills/beta/SKILL.md"));
+});
+
+test("skillflag binary routes install PATH to the installer CLI", async (t) => {
+  const repo = await makeTempDir("skillflag-bin-install-repo-");
+  const skill = await makeTempDir("skillflag-bin-install-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: skillflag-bin-path\ndescription: Binary install path test\n---\n",
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      skillflagBinaryPath,
+      "install",
+      skill.dir,
+      "--agent",
+      "codex",
+      "--scope",
+      "repo",
+    ],
+    {
+      cwd: repo.dir,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Installed skillflag-bin-path to/);
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/skillflag-bin-path/SKILL.md"),
+  );
+});
+
+test("skillflag binary honors SKILLFLAG_SKILLS_ROOT and drops the bundled skill", () => {
+  const result = spawnSync(process.execPath, [skillflagBinaryPath, "list"], {
+    encoding: "utf8",
+    env: { ...process.env, SKILLFLAG_SKILLS_ROOT: fixturesRoot },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout,
+    "alpha\tAlpha test skill\nbeta\tBeta test skill\n",
+  );
+});
+
+test("skillflag binary routes piped tar install to the installer CLI", async (t) => {
+  const repo = await makeTempDir("skillflag-bin-tar-repo-");
+  const skill = await makeTempDir("skillflag-bin-tar-skill-");
+  t.after(async () => {
+    await repo.cleanup();
+    await skill.cleanup();
+  });
+
+  initGit(repo.dir);
+  await writeFile(
+    skill.dir,
+    "SKILL.md",
+    "---\nname: skillflag-bin-tar\ndescription: Binary install tar test\n---\n",
+  );
+  await writeFile(skill.dir, "templates/example.txt", "hello\n");
+
+  const { entries } = await collectSkillEntries(skill.dir, "skillflag-bin-tar");
+  const tarBuffer = await bufferFromStream(createTarStream(entries));
+
+  const result = spawnSync(
+    process.execPath,
+    [skillflagBinaryPath, "install", "--agent", "codex", "--scope", "repo"],
+    {
+      cwd: repo.dir,
+      encoding: "utf8",
+      input: tarBuffer,
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Installed skillflag-bin-tar to/);
+  await fs.access(
+    path.join(repo.dir, ".codex/skills/skillflag-bin-tar/SKILL.md"),
+  );
+});

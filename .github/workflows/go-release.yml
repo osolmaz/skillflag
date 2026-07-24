@@ -1,0 +1,36 @@
+name: Go Release
+
+on:
+  push:
+    tags:
+      - "go/v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "$TAG" | grep -Eq '^go/v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Tag $TAG does not match go/vX.Y.Z"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "Tagged commit is not on main"; exit 1; }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - name: Gate
+        working-directory: go
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+          go build -o /dev/null ./cmd/skillflag
+          go build -o /dev/null ./cmd/skill-install
+      - name: Create GitHub release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

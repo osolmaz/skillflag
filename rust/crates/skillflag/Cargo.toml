@@ -1,0 +1,24 @@
+[package]
+name = "skillflag"
+description = "Rust implementation of the Skillflag producer library/CLI and the skill-install companion CLI."
+readme = "../../README.md"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+include = ["Cargo.toml", "src/**", "skills/**", "tests/**"]
+
+[lib]
+name = "skillflag"
+path = "src/lib.rs"
+
+[dependencies]
+sha2.workspace = true
+
+[[bin]]
+name = "skillflag"
+path = "src/bin/skillflag.rs"
+
+[[bin]]
+name = "skill-install"
+path = "src/bin/skill_install.rs"

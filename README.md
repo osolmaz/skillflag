@@ -4,11 +4,12 @@
 [![npm downloads](https://img.shields.io/npm/dm/skillflag.svg)](https://www.npmjs.com/package/skillflag)
 [![CI](https://github.com/dutifuldev/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/dutifuldev/skillflag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/node/v/skillflag.svg)](https://nodejs.org)
 
 skillflag is a minimal CLI convention for bundling, listing and installing [agent skills](https://agentskills.io), so that you don't have to upload them to separate 3rd party skill registries.
 
 Spec: [Skillflag Specification](docs/SKILLFLAG_SPEC.md)
+
+This repository holds the spec and four implementations of it — TypeScript (the reference), Go, Python, and Rust. They implement the same standard: identical flags, identical output, byte-identical skill exports, verified by a shared conformance suite.
 
 ## Motivation
 
@@ -45,29 +46,63 @@ Installed skill philips-hue to ~/.claude/skills/philips-hue
 
 Even better, once this convention becomes commonplace, agents will by default do all these before they even run the tool, so when you ask it to "install hue-cli", it will know to run `--skill list` the same way a human would run `--help` after downloading a program, and install the necessary skills themselves without being asked to.
 
+## Implementations
+
+Pick the package that matches your CLI's language. Each one provides the same producer library (to embed `--skill` in your CLI) and the same installer, all of them export byte-identical skill bundles, and every package ships the same two binaries: `skillflag` and `skill-install`.
+
+| Language   | Package                                                            | Install                                            |
+| ---------- | ------------------------------------------------------------------ | -------------------------------------------------- |
+| TypeScript | [`skillflag`](https://www.npmjs.com/package/skillflag) (reference) | `npm install -g skillflag`                         |
+| Go         | `github.com/osolmaz/skillflag/go`                                  | `go install .../go/cmd/skillflag@latest` (see below) |
+| Python     | `skillflag`                                                        | `uv tool install skillflag`                        |
+| Rust       | `skillflag`                                                        | `cargo install skillflag --locked`                 |
+
+```sh
+npm install -g skillflag
+go install github.com/osolmaz/skillflag/go/cmd/skillflag@latest
+go install github.com/osolmaz/skillflag/go/cmd/skill-install@latest
+uv tool install skillflag
+cargo install skillflag --locked
+```
+
+Because the binaries share names, keep one implementation on your PATH at a time (they are interchangeable).
+
+Because every installer speaks the same standard, you only need one of them on your PATH — a Rust producer's export pipes into the npm installer just fine:
+
+```bash
+my-rust-tool --skill export my-skill | npx skillflag install --agent codex --scope repo
+```
+
+The TypeScript package is the reference implementation and additionally ships the interactive multi-select install wizard; the ports keep prompts minimal.
+
 ## Quick setup — add skillflag to your CLI
 
 Copy the prompt below and paste it into your coding agent. It will add skillflag support to your project.
 
-Currently TypeScript/Node only. [Open an issue](https://github.com/dutifuldev/skillflag/issues) if you'd like support for another language.
-
 ```text
 Add skillflag to this project so the CLI can bundle and expose agent skills.
 
-1. Install the skillflag library:
-   npm install skillflag
+1. Install the skillflag library for the project's language:
+   TypeScript: npm install skillflag
+   Go:         go get github.com/osolmaz/skillflag/go
+   Python:     add skillflag to the project dependencies
+   Rust:       cargo add skillflag
 
 2. Create a skill directory at skills/<skill-id>/SKILL.md or
    .agents/skills/<skill-id>/SKILL.md with a YAML frontmatter
    (name, description) and markdown instructions for the agent.
 
-3. In the CLI entrypoint, intercept --skill and delegate to skillflag:
+3. In the CLI entrypoint, intercept --skill and delegate to skillflag.
+   TypeScript example:
 
    import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
 
    await maybeHandleSkillflag(process.argv, {
      skillsRoot: findSkillsRoot(import.meta.url),
    });
+
+   The Go, Python, and Rust libraries expose the same pair of entry
+   points under idiomatic names.
 
 4. Verify it works:
    <tool> --skill list
@@ -80,16 +115,6 @@ Add skillflag to this project so the CLI can bundle and expose agent skills.
 6. For the skillflag specification:
    https://raw.githubusercontent.com/dutifuldev/skillflag/main/docs/SKILLFLAG_SPEC.md
 ```
-
-## Install (optional)
-
-```bash
-npm install -g skillflag
-```
-
-You can also run it without installing by using `npx` (see below).
-
-skillflag is currently implemented in Node/TypeScript. Reach out if you'd like to see it implemented in other languages.
 
 ## Quick start
 
@@ -115,7 +140,7 @@ When `--agent` or `--scope` is omitted and a TTY is available, `skill-install` l
 <tool> --skill export <id> | npx skillflag install
 ```
 
-The wizard lets you pick agents and scopes with arrow keys and space to select, then confirms before installing. This works even when stdin is piped.
+The wizard lets you pick agents and scopes with arrow keys and space to select, then confirms before installing. This works even when stdin is piped. (TypeScript implementation only; the Go/Python/Rust installers fall back to simple numbered prompts.)
 
 ### Multi-target install
 
@@ -127,27 +152,6 @@ To install to multiple agents/scopes in one run, use the interactive wizard:
 ```
 
 In the wizard, select multiple entries with space, then confirm the matrix install.
-
-## Add skillflag to your CLI
-
-1. Add the library and ship your skill directory in the package.
-2. Add a `skills/<skill-id>/SKILL.md` or
-   `.agents/skills/<skill-id>/SKILL.md` in your repo.
-3. In your CLI entrypoint, intercept `--skill` and delegate to skillflag.
-
-```bash
-npm install skillflag
-```
-
-```ts
-import { findSkillsRoot, maybeHandleSkillflag } from "skillflag";
-
-await maybeHandleSkillflag(process.argv, {
-  skillsRoot: findSkillsRoot(import.meta.url),
-});
-```
-
-See the full guide in [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ## Supported agents
 
@@ -161,12 +165,20 @@ codex, claude, portable, vscode, copilot, amp, goose, opencode, factory, cursor
 | `user` | Install into the user's home config (e.g. `~/.codex/skills/`) |
 | `cwd`  | Install relative to the current working directory             |
 
-## Help
+## Repository layout
 
-```bash
-skill-install --help
-```
+- `docs/` — the spec, the [deterministic tar contract](docs/DETERMINISTIC_TAR.md), and the [integration guide](docs/INTEGRATION.md)
+- `typescript/`, `go/`, `python/`, `rust/` — the four implementations
+- `skills/skillflag/` — the canonical bundled skill (mirrored into each package by `make sync-skills`)
+- `fixtures/` — shared test fixtures
+- `scripts/check-conformance.mjs` — cross-implementation conformance suite (`make conformance`)
+
+Development gate: `make check` from the repo root. See [AGENTS.md](AGENTS.md) for contribution rules.
 
 ## Bundled skill
 
-This repo ships a single bundled skill at `skills/skillflag/` that documents both `skillflag` and `skill-install`.
+Every implementation ships a single bundled skill, `skillflag`, that documents both the producer flags and the installer.
+
+## License
+
+[MIT](LICENSE)
