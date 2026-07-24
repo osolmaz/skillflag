@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/skillflag.svg)](https://www.npmjs.com/package/skillflag)
 [![npm downloads](https://img.shields.io/npm/dm/skillflag.svg)](https://www.npmjs.com/package/skillflag)
-[![CI](https://github.com/dutifuldev/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/dutifuldev/skillflag/actions/workflows/ci.yml)
+[![CI](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml/badge.svg)](https://github.com/osolmaz/skillflag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 skillflag is a minimal CLI convention for bundling, listing and installing [agent skills](https://agentskills.io), so that you don't have to upload them to separate 3rd party skill registries.
@@ -110,10 +110,10 @@ Add skillflag to this project so the CLI can bundle and expose agent skills.
    <tool> --skill export <id> | npx skillflag install
 
 5. For the full integration guide:
-   https://raw.githubusercontent.com/dutifuldev/skillflag/main/docs/INTEGRATION.md
+   https://raw.githubusercontent.com/osolmaz/skillflag/main/docs/INTEGRATION.md
 
 6. For the skillflag specification:
-   https://raw.githubusercontent.com/dutifuldev/skillflag/main/docs/SKILLFLAG_SPEC.md
+   https://raw.githubusercontent.com/osolmaz/skillflag/main/docs/SKILLFLAG_SPEC.md
 ```
 
 ## Quick start
