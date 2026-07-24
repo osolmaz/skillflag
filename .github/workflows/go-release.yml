@@ -28,8 +28,8 @@ jobs:
           test -z "$(gofmt -l .)"
           go vet ./...
           go test ./...
-          go build -o /dev/null ./cmd/skillflag-go
-          go build -o /dev/null ./cmd/skill-install-go
+          go build -o /dev/null ./cmd/skillflag
+          go build -o /dev/null ./cmd/skill-install
       - name: Create GitHub release
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
         env:

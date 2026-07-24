@@ -1,7 +1,7 @@
-// Command skillflag-go is the standalone Skillflag producer binary. Its
+// Command skillflag is the standalone Skillflag producer binary. Its
 // default skills root is the bundled skillflag skill; the
 // SKILLFLAG_SKILLS_ROOT environment variable (an OS path-list of skills
-// roots) replaces it for conformance testing. `skillflag-go install ...`
+// roots) replaces it for conformance testing. `skillflag install ...`
 // routes directly to the installer CLI.
 package main
 

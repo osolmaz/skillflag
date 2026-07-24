@@ -1,19 +1,19 @@
-# skillflag-rs
+# skillflag (Rust)
 
 Rust implementation of the [Skillflag](https://github.com/osolmaz/skillflag) convention: a minimal CLI interface for bundling, listing, and installing [agent skills](https://agentskills.io) without a third-party registry.
 
-The `skillflag-rs` crate ships:
+The `skillflag` crate ships:
 
 - the embeddable producer library (`skillflag::maybe_handle_skillflag`, `skillflag::find_skills_root`),
-- the standalone `skillflag-rs` binary,
-- the `skill-install-rs` adaptor that installs exported skills into agent tools (Claude Code, Codex, Amp, Goose, and others).
+- the standalone `skillflag` binary,
+- the `skill-install` adaptor that installs exported skills into agent tools (Claude Code, Codex, Amp, Goose, and others).
 
 Exports are byte-identical to the other Skillflag implementations (TypeScript, Go, Python) — any producer can be paired with any installer. The only dependency is `sha2`.
 
 ## Install
 
 ```bash
-cargo install skillflag-rs --locked
+cargo install skillflag --locked
 ```
 
 ## Embed in your CLI
@@ -39,7 +39,7 @@ fn main() {
 Then ship a `skills/<skill-id>/SKILL.md` directory with your tool. Users install your skill with:
 
 ```bash
-your-tool --skill export <id> | skill-install-rs --agent claude --scope repo
+your-tool --skill export <id> | skill-install --agent claude --scope repo
 ```
 
 ## Documentation

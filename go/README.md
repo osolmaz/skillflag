@@ -5,16 +5,16 @@ Go implementation of the [Skillflag](https://github.com/osolmaz/skillflag) conve
 This module ships:
 
 - the embeddable producer package `github.com/osolmaz/skillflag/go/skillflag` (`MaybeHandle`, `FindSkillsRoot`),
-- the standalone `skillflag-go` binary,
-- the `skill-install-go` adaptor that installs exported skills into agent tools (Claude Code, Codex, Amp, Goose, and others).
+- the standalone `skillflag` binary,
+- the `skill-install` adaptor that installs exported skills into agent tools (Claude Code, Codex, Amp, Goose, and others).
 
 Exports are byte-identical to the other Skillflag implementations (TypeScript, Python, Rust) — any producer can be paired with any installer. The module has zero third-party dependencies.
 
 ## Install
 
 ```bash
-go install github.com/osolmaz/skillflag/go/cmd/skillflag-go@latest
-go install github.com/osolmaz/skillflag/go/cmd/skill-install-go@latest
+go install github.com/osolmaz/skillflag/go/cmd/skillflag@latest
+go install github.com/osolmaz/skillflag/go/cmd/skill-install@latest
 ```
 
 ## Embed in your CLI
@@ -44,7 +44,7 @@ func main() {
 Then ship a `skills/<skill-id>/SKILL.md` directory with your tool. Users install your skill with:
 
 ```bash
-your-tool --skill export <id> | skill-install-go --agent claude --scope repo
+your-tool --skill export <id> | skill-install --agent claude --scope repo
 ```
 
 ## Documentation

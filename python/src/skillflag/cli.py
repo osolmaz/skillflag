@@ -45,12 +45,12 @@ SKILLFLAG_HELP_TEXT = "\n".join(
     [
         "Skillflag help",
         "",
-        "Install skillflag-py globally to get both binaries on your PATH:",
-        "  pip install skillflag-py",
+        "Install skillflag globally to get both binaries on your PATH:",
+        "  pip install skillflag",
         "",
         "Prefer not to install globally? Use uvx for one-off runs:",
-        "  uvx --from skillflag-py skillflag-py list",
-        "  uvx --from skillflag-py skillflag-py install --agent codex --scope repo < ./skill.tar",
+        "  uvx --from skillflag skillflag list",
+        "  uvx --from skillflag skillflag install --agent codex --scope repo < ./skill.tar",
         "",
         "List available skills:",
         "  tool --skill list",
@@ -210,7 +210,7 @@ def _run_install_action(
         inputs.append(TarInput(data=build_skill_tar(skill_dir, skill_id)))
 
     return run_install_cli(
-        ["skillflag-py", "skill-install", *action.install_args],
+        ["skillflag", "skill-install", *action.install_args],
         stdin=stdin,
         stdout=stdout,
         stderr=stderr,
@@ -293,13 +293,13 @@ def maybe_handle_skillflag(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Standalone `skillflag-py` entry point."""
+    """Standalone `skillflag` entry point."""
     raw_args = list(sys.argv[1:] if argv is None else argv)
 
     if raw_args and raw_args[0] == "install":
         from skillflag.install.cli import run_install_cli
 
-        return run_install_cli(["skillflag-py", "skill-install", *raw_args[1:]])
+        return run_install_cli(["skillflag", "skill-install", *raw_args[1:]])
 
     env_roots = os.environ.get(SKILLS_ROOT_ENV_VAR)
     if env_roots is not None:
@@ -308,4 +308,4 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         opts = SkillflagOptions(skills_root=default_skills_root())
 
-    return handle_skillflag(["skillflag-py", "skillflag-py", *raw_args], opts)
+    return handle_skillflag(["skillflag", "skillflag", *raw_args], opts)

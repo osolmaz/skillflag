@@ -80,28 +80,28 @@ function defineImplementations() {
       [
         "go",
         "go",
-        ["build", "-o", buildDir + path.sep, "./cmd/skillflag-go", "./cmd/skill-install-go"],
+        ["build", "-o", buildDir + path.sep, "./cmd/skillflag", "./cmd/skill-install"],
         goDir,
       ],
     ],
     () => ({
-      producer: [path.join(buildDir, "skillflag-go")],
-      installer: [path.join(buildDir, "skill-install-go")],
+      producer: [path.join(buildDir, "skillflag")],
+      installer: [path.join(buildDir, "skill-install")],
     }),
   );
 
   const pyDir = path.join(repoRoot, "python");
   const venvBin = path.join(pyDir, ".venv", "bin");
   define("python", "python", [["python", "uv", ["sync", "--quiet"], pyDir]], () => ({
-    producer: [path.join(venvBin, "skillflag-py")],
-    installer: [path.join(venvBin, "skill-install-py")],
+    producer: [path.join(venvBin, "skillflag")],
+    installer: [path.join(venvBin, "skill-install")],
   }));
 
   const rustDir = path.join(repoRoot, "rust");
   const rustTarget = path.join(rustDir, "target", "debug");
   define("rust", "rust", [["rust", "cargo", ["build", "--quiet", "--workspace"], rustDir]], () => ({
-    producer: [path.join(rustTarget, "skillflag-rs")],
-    installer: [path.join(rustTarget, "skill-install-rs")],
+    producer: [path.join(rustTarget, "skillflag")],
+    installer: [path.join(rustTarget, "skill-install")],
   }));
 
   return impls;

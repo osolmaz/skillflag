@@ -56,8 +56,8 @@ jobs:
           args: ./...
       - run: go vet ./...
       - run: go test ./...
-      - run: go build -o /dev/null ./cmd/skillflag-go
-      - run: go build -o /dev/null ./cmd/skill-install-go
+      - run: go build -o /dev/null ./cmd/skillflag
+      - run: go build -o /dev/null ./cmd/skill-install
 
   python:
     runs-on: ubuntu-latest

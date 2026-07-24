@@ -1,5 +1,5 @@
 [package]
-name = "skillflag-rs"
+name = "skillflag"
 description = "Rust implementation of the Skillflag producer library/CLI and the skill-install companion CLI."
 readme = "../../README.md"
 edition.workspace = true
@@ -16,9 +16,9 @@ path = "src/lib.rs"
 sha2.workspace = true
 
 [[bin]]
-name = "skillflag-rs"
-path = "src/bin/skillflag_rs.rs"
+name = "skillflag"
+path = "src/bin/skillflag.rs"
 
 [[bin]]
-name = "skill-install-rs"
-path = "src/bin/skill_install_rs.rs"
+name = "skill-install"
+path = "src/bin/skill_install.rs"

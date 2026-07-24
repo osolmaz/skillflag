@@ -27,7 +27,7 @@ func runMain(t *testing.T, argv []string, skillsRootEnv string, stdin string) (i
 }
 
 func TestDefaultRootIsBundledSkillOnly(t *testing.T) {
-	code, stdout, stderr := runMain(t, []string{"skillflag-go", "--skill", "list"}, "", "")
+	code, stdout, stderr := runMain(t, []string{"skillflag", "--skill", "list"}, "", "")
 	if code != 0 || stderr != "" {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -41,7 +41,7 @@ func TestSkillsRootEnvReplacesBundledSkill(t *testing.T) {
 	t.Setenv("SKILLFLAG_SKILLS_ROOT", fixturesRoot(t))
 
 	code, stdout, stderr := runMain(
-		t, []string{"skillflag-go", "--skill", "list"}, fixturesRoot(t), "")
+		t, []string{"skillflag", "--skill", "list"}, fixturesRoot(t), "")
 	if code != 0 || stderr != "" {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -59,7 +59,7 @@ func TestSkillsRootEnvSupportsPathList(t *testing.T) {
 	writeSkillDir(t, second, "zeta", "Zeta skill")
 	env := fixturesRoot(t) + string(filepath.ListSeparator) + second
 
-	code, stdout, stderr := runMain(t, []string{"skillflag-go", "list"}, env, "")
+	code, stdout, stderr := runMain(t, []string{"skillflag", "list"}, env, "")
 	if code != 0 || stderr != "" {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -70,7 +70,7 @@ func TestSkillsRootEnvSupportsPathList(t *testing.T) {
 }
 
 func TestInstallRoutesToInstallerCLI(t *testing.T) {
-	code, stdout, stderr := runMain(t, []string{"skillflag-go", "install", "--help"}, "", "")
+	code, stdout, stderr := runMain(t, []string{"skillflag", "install", "--help"}, "", "")
 	if code != 0 || stderr != "" {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}
@@ -93,7 +93,7 @@ func TestInstallRoutesPathInstall(t *testing.T) {
 
 	chdir(t, repo)
 	code, _, stderr := runMain(
-		t, []string{"skillflag-go", "install", skillDir, "--agent", "codex", "--scope", "repo"}, "", "")
+		t, []string{"skillflag", "install", skillDir, "--agent", "codex", "--scope", "repo"}, "", "")
 	if code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, stderr)
 	}

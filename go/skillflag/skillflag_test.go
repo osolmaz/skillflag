@@ -115,7 +115,7 @@ func TestListZeroSkillsPrintsNothing(t *testing.T) {
 }
 
 func TestListStandaloneActionWithoutSkillFlag(t *testing.T) {
-	res := runHandle([]string{"skillflag-go", "list"}, fixtureOpts(t))
+	res := runHandle([]string{"skillflag", "list"}, fixtureOpts(t))
 	if res.code != 0 || !strings.HasPrefix(res.stdout.String(), "alpha\t") {
 		t.Fatalf("code=%d stdout=%q", res.code, res.stdout.String())
 	}

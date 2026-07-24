@@ -32,7 +32,7 @@ jobs:
           cargo test
       - name: Publish to crates.io
         working-directory: rust
-        run: cargo publish -p skillflag-rs
+        run: cargo publish -p skillflag
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Create GitHub release

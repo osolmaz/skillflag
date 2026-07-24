@@ -1,9 +1,9 @@
 //! Standalone Skillflag producer binary.
 //!
-//! `skillflag-rs install ...` routes directly to the installer CLI (like the
+//! `skillflag install ...` routes directly to the installer CLI (like the
 //! reference `skillflag` bin); everything else goes through the producer
 //! `--skill` dispatcher, which also accepts the action directly
-//! (`skillflag-rs list`).
+//! (`skillflag list`).
 //!
 //! When `SKILLFLAG_SKILLS_ROOT` is set it provides the skills roots (platform
 //! path-list separator) and the bundled skill is excluded; when unset, the

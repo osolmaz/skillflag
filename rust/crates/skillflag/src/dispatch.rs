@@ -88,7 +88,7 @@ enum SkillAction {
 ///
 /// When a `--skill` token is present, the action starts right after it.
 /// Otherwise `argv[0]` is treated as the program name and skipped, so the
-/// standalone binary accepts the action directly (`skillflag-rs list`).
+/// standalone binary accepts the action directly (`skillflag list`).
 fn resolve_skill_action_args(argv: &[String]) -> &[String] {
     if let Some(index) = argv.iter().position(|arg| arg == "--skill") {
         return &argv[index + 1..];
@@ -433,13 +433,13 @@ mod tests {
 
     #[test]
     fn standalone_accepts_action_directly() {
-        let action = parse_skill_args(&argv(&["skillflag-rs", "list"]));
+        let action = parse_skill_args(&argv(&["skillflag", "list"]));
         assert_eq!(action.unwrap(), SkillAction::List { json: false });
     }
 
     #[test]
     fn missing_action_errors_with_usage() {
-        let err = parse_skill_args(&argv(&["skillflag-rs"])).unwrap_err();
+        let err = parse_skill_args(&argv(&["skillflag"])).unwrap_err();
         assert!(err.message.starts_with("Missing --skill action.\nUsage:"));
         let err = parse_skill_args(&argv(&["x", "--skill", "--json"])).unwrap_err();
         assert!(err.message.starts_with("Missing --skill action."));

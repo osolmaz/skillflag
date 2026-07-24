@@ -2,7 +2,7 @@
 
 This guide shows how to expose `--skill` in your own CLI using the Skillflag library. The goal is to keep your tool **agent-agnostic**: you only list/export skills, while users install them with `skillflag install` (or any compatible installer).
 
-The code examples below use the TypeScript reference implementation (npm `skillflag`). The Go (`github.com/osolmaz/skillflag/go`), Python (`skillflag-py`), and Rust (`skillflag-rs`) libraries in this repository expose the same producer entry points under idiomatic names — see each package's README.
+The code examples below use the TypeScript reference implementation (npm `skillflag`). The Go (`github.com/osolmaz/skillflag/go`), Python (`skillflag`), and Rust (`skillflag`) libraries in this repository expose the same producer entry points under idiomatic names — see each package's README.
 
 ## 1) Add a skills directory
 

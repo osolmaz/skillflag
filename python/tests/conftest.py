@@ -31,7 +31,7 @@ def run_producer(
     stdout = io.BytesIO()
     stderr = io.StringIO()
     code = handle_skillflag(
-        ["skillflag-py", "x", *args],
+        ["skillflag", "x", *args],
         SkillflagOptions(
             skills_root=skills_root,
             stdin=stdin if stdin is not None else io.BytesIO(),

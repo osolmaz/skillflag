@@ -48,22 +48,24 @@ Even better, once this convention becomes commonplace, agents will by default do
 
 ## Implementations
 
-Pick the package that matches your CLI's language. Each one provides the same producer library (to embed `--skill` in your CLI) and the same installer, and all of them export byte-identical skill bundles.
+Pick the package that matches your CLI's language. Each one provides the same producer library (to embed `--skill` in your CLI) and the same installer, all of them export byte-identical skill bundles, and every package ships the same two binaries: `skillflag` and `skill-install`.
 
-| Language   | Package                                                | Producer binary | Installer binary   |
-| ---------- | ------------------------------------------------------ | --------------- | ------------------ |
-| TypeScript | [`skillflag`](https://www.npmjs.com/package/skillflag) (reference) | `skillflag`     | `skill-install`    |
-| Go         | `github.com/osolmaz/skillflag/go`                      | `skillflag-go`  | `skill-install-go` |
-| Python     | `skillflag-py`                                         | `skillflag-py`  | `skill-install-py` |
-| Rust       | `skillflag-rs`                                         | `skillflag-rs`  | `skill-install-rs` |
+| Language   | Package                                                            | Install                                            |
+| ---------- | ------------------------------------------------------------------ | -------------------------------------------------- |
+| TypeScript | [`skillflag`](https://www.npmjs.com/package/skillflag) (reference) | `npm install -g skillflag`                         |
+| Go         | `github.com/osolmaz/skillflag/go`                                  | `go install .../go/cmd/skillflag@latest` (see below) |
+| Python     | `skillflag`                                                        | `uv tool install skillflag`                        |
+| Rust       | `skillflag`                                                        | `cargo install skillflag --locked`                 |
 
 ```sh
 npm install -g skillflag
-go install github.com/osolmaz/skillflag/go/cmd/skillflag-go@latest
-go install github.com/osolmaz/skillflag/go/cmd/skill-install-go@latest
-uv tool install skillflag-py
-cargo install skillflag-rs --locked
+go install github.com/osolmaz/skillflag/go/cmd/skillflag@latest
+go install github.com/osolmaz/skillflag/go/cmd/skill-install@latest
+uv tool install skillflag
+cargo install skillflag --locked
 ```
+
+Because the binaries share names, keep one implementation on your PATH at a time (they are interchangeable).
 
 Because every installer speaks the same standard, you only need one of them on your PATH — a Rust producer's export pipes into the npm installer just fine:
 
@@ -83,8 +85,8 @@ Add skillflag to this project so the CLI can bundle and expose agent skills.
 1. Install the skillflag library for the project's language:
    TypeScript: npm install skillflag
    Go:         go get github.com/osolmaz/skillflag/go
-   Python:     add skillflag-py to the project dependencies
-   Rust:       cargo add skillflag-rs
+   Python:     add skillflag to the project dependencies
+   Rust:       cargo add skillflag
 
 2. Create a skill directory at skills/<skill-id>/SKILL.md or
    .agents/skills/<skill-id>/SKILL.md with a YAML frontmatter

@@ -10,7 +10,7 @@ def run_installer(args, *, stdin=None, cwd=None, **kwargs):
     stdout = io.BytesIO()
     stderr = io.StringIO()
     code = run_install_cli(
-        ["skill-install-py", "skill-install", *args],
+        ["skill-install", "skill-install", *args],
         stdin=stdin if stdin is not None else io.BytesIO(),
         stdout=stdout,
         stderr=stderr,

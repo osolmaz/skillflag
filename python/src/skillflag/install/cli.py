@@ -422,4 +422,4 @@ def run_install_cli(
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    return run_install_cli(["skill-install-py", "skill-install", *args])
+    return run_install_cli(["skill-install", "skill-install", *args])

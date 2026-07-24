@@ -12,7 +12,7 @@ def test_export_install_round_trip(git_repo):
 
     stderr = io.StringIO()
     install_code = run_install_cli(
-        ["skill-install-py", "skill-install", "--agent", "codex", "--scope", "repo"],
+        ["skill-install", "skill-install", "--agent", "codex", "--scope", "repo"],
         stdin=io.BytesIO(tar_bytes),
         stdout=io.BytesIO(),
         stderr=stderr,

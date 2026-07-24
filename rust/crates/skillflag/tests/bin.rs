@@ -7,8 +7,8 @@ use std::process::{Command, Stdio};
 
 use support::{assert_tree_equal, fixtures_root, TempDir};
 
-const PRODUCER_BIN: &str = env!("CARGO_BIN_EXE_skillflag-rs");
-const INSTALLER_BIN: &str = env!("CARGO_BIN_EXE_skill-install-rs");
+const PRODUCER_BIN: &str = env!("CARGO_BIN_EXE_skillflag");
+const INSTALLER_BIN: &str = env!("CARGO_BIN_EXE_skill-install");
 
 #[test]
 fn skills_root_env_serves_fixtures_and_excludes_bundled_skill() {

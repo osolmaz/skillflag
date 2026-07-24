@@ -16,7 +16,7 @@ check-go:
 	cd go && if command -v golangci-lint >/dev/null; then GOWORK=off GOFLAGS=-buildvcs=false golangci-lint run ./...; else echo "golangci-lint not installed; skipping (CI runs it)"; fi
 	cd go && GOWORK=off go vet ./...
 	cd go && GOWORK=off go test ./...
-	cd go && GOWORK=off go build -o /dev/null ./cmd/skillflag-go && GOWORK=off go build -o /dev/null ./cmd/skill-install-go
+	cd go && GOWORK=off go build -o /dev/null ./cmd/skillflag && GOWORK=off go build -o /dev/null ./cmd/skill-install
 
 check-python:
 	cd python && uv sync

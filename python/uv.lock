@@ -103,7 +103,7 @@ wheels = [
 ]
 
 [[package]]
-name = "skillflag-py"
+name = "skillflag"
 version = "0.1.0"
 source = { editable = "." }
 

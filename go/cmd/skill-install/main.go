@@ -1,4 +1,4 @@
-// Command skill-install-go implements the skill-install companion CLI: it
+// Command skill-install implements the skill-install companion CLI: it
 // installs a skill directory or a tar bundle from stdin into a target
 // agent/scope destination.
 package main

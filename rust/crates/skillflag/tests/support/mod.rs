@@ -28,7 +28,7 @@ impl TempDir {
             .map(|d| d.subsec_nanos())
             .unwrap_or(0);
         let path = std::env::temp_dir().join(format!(
-            "skillflag-rs-test-{}-{}-{nanos:09}",
+            "skillflag-test-{}-{}-{nanos:09}",
             std::process::id(),
             TEMP_COUNTER.fetch_add(1, Ordering::Relaxed),
         ));

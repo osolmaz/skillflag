@@ -1,7 +1,8 @@
 [project]
-name = "skillflag-py"
+name = "skillflag"
 version = "0.1.0"
 description = "Skillflag producer CLI and skill-install companion (Python port)"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Onur Solmaz" }]
@@ -12,8 +13,8 @@ Homepage = "https://github.com/osolmaz/skillflag"
 Repository = "https://github.com/osolmaz/skillflag"
 
 [project.scripts]
-skillflag-py = "skillflag.cli:main"
-skill-install-py = "skillflag.install.cli:main"
+skillflag = "skillflag.cli:main"
+skill-install = "skillflag.install.cli:main"
 
 [build-system]
 requires = ["hatchling"]

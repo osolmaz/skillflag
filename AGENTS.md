@@ -1,8 +1,10 @@
 # Agent Instructions
 
 This repository holds the Skillflag specification and four implementations of
-it: `typescript/` (the reference, published to npm as `skillflag`), `go/`,
-`python/` (`skillflag-py`), and `rust/` (`skillflag-rs`).
+it: `typescript/` (the reference), `go/`, `python/`, and `rust/`. Every
+package publishes under the unsuffixed name `skillflag` on its registry (npm,
+PyPI, crates.io; Go via the module path) and ships the same two binaries,
+`skillflag` and `skill-install`.
 
 ## Ground rules
 
@@ -16,7 +18,7 @@ it: `typescript/` (the reference, published to npm as `skillflag`), `go/`,
 - The canonical bundled skill is `skills/skillflag/`. Never edit the copies
   inside the packages; edit the canonical one and run `make sync-skills`.
 - Keep runtime dependencies at zero in the Go, Python, and Rust ports (Rust
-  allows `sha2`/`tar`). The TypeScript package keeps only `tar-stream` and
+  allows `sha2`). The TypeScript package keeps only `tar-stream` and
   `@clack/prompts`.
 - Run `make check` (or the relevant `make check-<lang>`) from the repo root
   before finishing any change.
